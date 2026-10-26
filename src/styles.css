@@ -1,0 +1,436 @@
+/*
+ * Oberfläche für das iPad, bedient von jemandem, der keine Lust auf
+ * Fummelei hat: große Flächen, kräftiger Kontrast, nichts Verstecktes
+ * außer den erweiterten Einstellungen.
+ */
+
+:root {
+  --paper: #f7f5f2;
+  --surface: #ffffff;
+  --surface-sunken: #efece7;
+  --ink: #1d2320;
+  --ink-soft: #5a635e;
+  --line: #d8d2c8;
+  --accent: #2f6f5e;
+  --accent-ink: #ffffff;
+  --accent-soft: #e3efea;
+  --warn: #8a5a1d;
+  --warn-soft: #fbf0dd;
+  --danger: #9d3b2b;
+
+  --radius: 14px;
+  --touch: 60px;
+  --gap: 20px;
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 19px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+/* ---------- Kopf mit Schrittanzeige ---------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 21px;
+  letter-spacing: 0.01em;
+}
+
+.steps {
+  display: flex;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 16px;
+  color: var(--ink-soft);
+  background: var(--surface-sunken);
+  white-space: nowrap;
+}
+
+.steps li[aria-current='step'] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.steps li[data-done='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.step-number {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* ---------- Inhalt ---------- */
+
+main {
+  flex: 1;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--gap);
+}
+
+.card h2 {
+  margin: 0 0 6px;
+  font-size: 24px;
+}
+
+.card .hint {
+  margin: 0 0 var(--gap);
+  color: var(--ink-soft);
+  font-size: 17px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.spread {
+  justify-content: space-between;
+}
+
+/* ---------- Bedienelemente ---------- */
+
+button {
+  font: inherit;
+  min-height: var(--touch);
+  padding: 0 24px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: 20px;
+}
+
+button.ghost {
+  background: transparent;
+}
+
+button.big {
+  min-height: 72px;
+  font-size: 21px;
+}
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 260px;
+  padding: 32px;
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+  text-align: center;
+}
+
+.dropzone[data-over='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+label.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 17px;
+  color: var(--ink-soft);
+}
+
+input[type='text'],
+input[type='number'] {
+  font: inherit;
+  min-height: var(--touch);
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+input[type='range'] {
+  width: 100%;
+  height: 44px;
+  accent-color: var(--accent);
+}
+
+select {
+  font: inherit;
+  min-height: var(--touch);
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* ---------- Farbliste ---------- */
+
+.colors {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.color-row[data-ignored='true'] {
+  opacity: 0.5;
+}
+
+.swatch {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+}
+
+.color-row .name {
+  flex: 1;
+  min-width: 140px;
+}
+
+.color-meta {
+  font-size: 15px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Vorschau ---------- */
+
+.preview {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius);
+}
+
+.preview canvas {
+  max-width: 100%;
+  height: auto;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: var(--gap) 0 0;
+  padding: 0;
+}
+
+.stats div {
+  padding: 12px 14px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius);
+}
+
+.stats dt {
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+.stats dd {
+  margin: 2px 0 0;
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Hinweise ---------- */
+
+.notice {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--warn-soft);
+  color: var(--warn);
+  border: 1px solid currentColor;
+  font-size: 17px;
+}
+
+.notice[data-kind='error'] {
+  background: #fbe9e5;
+  color: var(--danger);
+}
+
+/* ---------- Erweiterte Einstellungen ---------- */
+
+details.advanced {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+details.advanced > summary {
+  min-height: var(--touch);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+
+details.advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.advanced > summary::after {
+  content: '▾';
+  margin-left: auto;
+  color: var(--ink-soft);
+}
+
+details.advanced[open] > summary::after {
+  content: '▴';
+}
+
+.advanced-body {
+  padding: 0 20px 20px;
+  display: grid;
+  gap: 16px;
+}
+
+/* ---------- Fußleiste ---------- */
+
+.actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--line);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .steps li span:last-child {
+    display: none;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #161a18;
+    --surface: #1f2522;
+    --surface-sunken: #262d29;
+    --ink: #eef1ef;
+    --ink-soft: #a7b2ac;
+    --line: #38423d;
+    --accent: #5aa992;
+    --accent-ink: #10201b;
+    --accent-soft: #24352f;
+    --warn: #e0b269;
+    --warn-soft: #302819;
+    --danger: #e08a78;
+    color-scheme: dark;
+  }
+}
