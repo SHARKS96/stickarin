@@ -2,7 +2,7 @@
 import { HOOPS } from '../../core/constants.ts';
 import { SIZE_STEP_MM } from '../../core/constants.ts';
 import type { HoopId } from '../../core/constants.ts';
-import { ChevronRight, Minus, Plus, Rotate } from '../Icons.tsx';
+import { Weiter, Weniger, Hinzufuegen, Drehen } from '../Icons.tsx';
 import type { DesignState } from '../../state/useDesign.ts';
 
 /** Millimeter als „8,0 cm“. */
@@ -65,7 +65,7 @@ export function SizeScreen({ design, onNext }: { design: DesignState; onNext: ()
               Motiv {cm(outerWidth)} × {cm(outerHeight)} · Rahmen {hoop.name}
             </span>
             <button type="button" className="btn soft" onClick={design.rotate}>
-              <Rotate size={26} />
+              <Drehen size={26} />
               Drehen
             </button>
           </div>
@@ -82,7 +82,7 @@ export function SizeScreen({ design, onNext }: { design: DesignState; onNext: ()
                 disabled={atMin}
                 onClick={() => design.setWidthMm(design.widthMm - SIZE_STEP_MM)}
               >
-                <Minus size={34} />
+                <Weniger size={34} />
               </button>
               <span className="value">{cm(design.widthMm)}</span>
               <button
@@ -92,7 +92,7 @@ export function SizeScreen({ design, onNext }: { design: DesignState; onNext: ()
                 disabled={atMax}
                 onClick={() => design.setWidthMm(design.widthMm + SIZE_STEP_MM)}
               >
-                <Plus size={34} />
+                <Hinzufuegen size={34} />
               </button>
             </div>
             <p className="muted">
@@ -124,7 +124,7 @@ export function SizeScreen({ design, onNext }: { design: DesignState; onNext: ()
 
           <button type="button" className="btn primary block spacer" onClick={onNext}>
             Weiter
-            <ChevronRight size={26} />
+            <Weiter size={26} />
           </button>
         </div>
       </div>

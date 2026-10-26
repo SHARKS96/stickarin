@@ -133,18 +133,26 @@ export function useDesign() {
   // --- Flächen --------------------------------------------------------
   const areas = useMemo<AreaView[]>(() => {
     const infos = worker.result?.areas ?? [];
-    return infos.map((info, index) => {
-      const override = areaOverrides[index];
-      const spacing = override?.spacing ?? info.defaults.spacing;
-      return {
-        ...info,
-        index,
-        stitchType: override?.stitchType ?? info.defaults.stitchType,
-        densityLevel: override ? nearestDensityLevel(spacing) : DEFAULT_DENSITY_LEVEL,
-        raised: (override?.raisedLayers ?? 0) > 0,
-      };
-    });
-  }, [worker.result, areaOverrides]);
+    return (
+      infos
+        // Flächen einer weggelassenen Farbe werden nicht gestickt und haben
+        // in den erweiterten Einstellungen nichts verloren. Der Index bleibt
+        // der der vollständigen Liste, weil der Worker danach adressiert.
+        .map((info, index) => ({ info, index }))
+        .filter(({ info }) => !ignoredColors[info.colorIndex])
+        .map(({ info, index }) => {
+          const override = areaOverrides[index];
+          const spacing = override?.spacing ?? info.defaults.spacing;
+          return {
+            ...info,
+            index,
+            stitchType: override?.stitchType ?? info.defaults.stitchType,
+            densityLevel: override ? nearestDensityLevel(spacing) : DEFAULT_DENSITY_LEVEL,
+            raised: (override?.raisedLayers ?? 0) > 0,
+          };
+        })
+    );
+  }, [worker.result, areaOverrides, ignoredColors]);
 
   // --- Rechnung anstoßen ----------------------------------------------
   // Der Worker bekommt immer den vollständigen Satz Einstellungen; was

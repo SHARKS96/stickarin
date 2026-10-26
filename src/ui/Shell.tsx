@@ -5,7 +5,7 @@
  * Fokusfalle, Escape und das Abdunkeln des Hintergrunds.
  */
 import { useEffect, useRef } from 'react';
-import { Check, ChevronLeft, Question } from './Icons.tsx';
+import { Fertig, Zurueck, Hilfe } from './Icons.tsx';
 
 export const STEPS = ['Bild', 'Größe', 'Farben', 'Vorschau', 'Speichern'] as const;
 
@@ -22,7 +22,7 @@ export function TopBar({ step, onBack, backLabel = 'Zurück', onHelp }: TopBarPr
     <div className="topbar">
       {onBack ? (
         <button type="button" className="btn" onClick={onBack}>
-          <ChevronLeft />
+          <Zurueck />
           {backLabel}
         </button>
       ) : (
@@ -40,7 +40,7 @@ export function TopBar({ step, onBack, backLabel = 'Zurück', onHelp }: TopBarPr
                   data-state={state}
                   aria-current={state === 'current' ? 'step' : undefined}
                 >
-                  {state === 'done' ? <Check size={20} /> : <span>{i + 1}</span>}
+                  {state === 'done' ? <Fertig size={20} /> : <span>{i + 1}</span>}
                   {label}
                 </li>
               );
@@ -50,7 +50,7 @@ export function TopBar({ step, onBack, backLabel = 'Zurück', onHelp }: TopBarPr
       )}
 
       <button type="button" className="btn" onClick={onHelp}>
-        <Question />
+        <Hilfe />
         Hilfe
       </button>
     </div>
@@ -78,7 +78,7 @@ export function HelpDialog({ open, title, steps, onClose }: HelpProps) {
     <dialog ref={ref} className="help" onClose={onClose} aria-labelledby="hilfe-titel">
       <div className="head">
         <span className="mark">
-          <Question size={32} />
+          <Hilfe size={32} />
         </span>
         <h2 id="hilfe-titel">{title}</h2>
       </div>

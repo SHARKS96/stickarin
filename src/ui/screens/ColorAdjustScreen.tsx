@@ -6,7 +6,7 @@
  * abweichen darf und trotzdem noch weggelassen wird.
  */
 import { useRef, useState } from 'react';
-import { Minus, Pipette, Plus } from '../Icons.tsx';
+import { Weniger, Pipette, Hinzufuegen } from '../Icons.tsx';
 import { StitchPreview } from '../StitchPreview.tsx';
 import type { DesignState } from '../../state/useDesign.ts';
 
@@ -125,7 +125,7 @@ export function ColorAdjustScreen({ design, colorIndex, onDone, onCancel }: Prop
                 aria-label="Weniger"
                 onClick={() => design.setTolerance(design.tolerance - 10)}
               >
-                <Minus size={26} />
+                <Weniger size={26} />
               </button>
               <input
                 id="toleranz"
@@ -142,7 +142,7 @@ export function ColorAdjustScreen({ design, colorIndex, onDone, onCancel }: Prop
                 aria-label="Mehr"
                 onClick={() => design.setTolerance(design.tolerance + 10)}
               >
-                <Plus size={26} />
+                <Hinzufuegen size={26} />
               </button>
             </div>
             <div className="row between muted" style={{ padding: '0 64px' }}>

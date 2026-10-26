@@ -1,9 +1,9 @@
 {
-  "name": "stick-karin",
+  "name": "stickarin",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Stickdatei-App: Bild rein, direkt stickbare Bernina-EXP raus.",
+  "description": "Stickarin: Bild rein, direkt stickbare Bernina-EXP raus.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "react": "18.3.1",

@@ -1,6 +1,6 @@
 /** Schritt 4: Vorschau, Kennzahlen und die Reihenfolge der Garne. */
 import { useState } from 'react';
-import { ChevronRight, Sliders } from '../Icons.tsx';
+import { Weiter, Einstellungen } from '../Icons.tsx';
 import { StitchPreview } from '../StitchPreview.tsx';
 import { cm, cmNumber } from './SizeScreen.tsx';
 import type { DesignState } from '../../state/useDesign.ts';
@@ -124,13 +124,13 @@ export function PreviewScreen({ design, onAdvanced, onNext }: Props) {
             onClick={onAdvanced}
           >
             <span style={{ color: 'var(--accent)', display: 'flex' }}>
-              <Sliders size={26} />
+              <Einstellungen size={26} />
             </span>
             <span style={{ flex: 1, textAlign: 'left', fontSize: 21, fontWeight: 400 }}>
               Erweiterte Einstellungen
             </span>
             <span style={{ color: 'var(--ink-mute)', display: 'flex' }}>
-              <ChevronRight size={24} />
+              <Weiter size={24} />
             </span>
           </button>
 
@@ -141,7 +141,7 @@ export function PreviewScreen({ design, onAdvanced, onNext }: Props) {
             onClick={onNext}
           >
             Weiter zum Speichern
-            <ChevronRight size={26} />
+            <Weiter size={26} />
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 /** Startseite: ein großer Knopf und die zuletzt erstellten Stickbilder. */
-import { ChevronRight, Needle, Trash } from '../Icons.tsx';
+import { Weiter, Hinzufuegen, Loeschen } from '../Icons.tsx';
+import { Wordmark } from '../Logo.tsx';
 import { formatSavedAt } from '../../state/storage.ts';
 import type { SavedDesignSummary } from '../../state/storage.ts';
 
@@ -15,13 +16,15 @@ export function StartScreen({ gallery, onNew, onOpen, onForget }: Props) {
     <div className="page">
       <header>
         <p>Guten Tag!</p>
-        <h1>Stickbilder</h1>
+        <h1 className="wordmark">
+          <Wordmark height={76} />
+        </h1>
       </header>
 
       <div className="home">
         <button type="button" className="cta" onClick={onNew}>
           <span className="mark">
-            <Needle size={72} />
+            <Hinzufuegen size={72} />
           </span>
           <span style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <span className="title">Neues Stickbild erstellen</span>
@@ -31,7 +34,7 @@ export function StartScreen({ gallery, onNew, onOpen, onForget }: Props) {
           </span>
           <span className="go-pill">
             Los geht’s
-            <ChevronRight />
+            <Weiter />
           </span>
         </button>
 
@@ -63,7 +66,7 @@ export function StartScreen({ gallery, onNew, onOpen, onForget }: Props) {
                     aria-label={`${d.name} aus der Liste entfernen`}
                     onClick={() => onForget(d.id)}
                   >
-                    <Trash size={22} />
+                    <Loeschen size={22} />
                   </button>
                 </li>
               ))}

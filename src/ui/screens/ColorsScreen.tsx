@@ -4,7 +4,7 @@
  * Links eine Vorschau, in der weggelassene Farben als Karomuster
  * durchscheinen; rechts die Garnliste mit Schaltern.
  */
-import { ChevronRight, Minus, Pipette, Plus } from '../Icons.tsx';
+import { Weiter, Weniger, Pipette, Hinzufuegen } from '../Icons.tsx';
 import { StitchPreview } from '../StitchPreview.tsx';
 import type { DesignState } from '../../state/useDesign.ts';
 
@@ -53,7 +53,7 @@ export function ColorsScreen({ design, onAdjust, onNext }: Props) {
                   disabled={design.colorCount <= 1}
                   onClick={() => design.setColorCount(design.colorCount - 1)}
                 >
-                  <Minus size={28} />
+                  <Weniger size={28} />
                 </button>
                 <span className="value">{design.colorCount}</span>
                 <button
@@ -63,7 +63,7 @@ export function ColorsScreen({ design, onAdjust, onNext }: Props) {
                   disabled={design.colorCount >= 8}
                   onClick={() => design.setColorCount(design.colorCount + 1)}
                 >
-                  <Plus size={28} />
+                  <Hinzufuegen size={28} />
                 </button>
               </div>
             </div>
@@ -120,7 +120,7 @@ export function ColorsScreen({ design, onAdjust, onNext }: Props) {
             onClick={onNext}
           >
             Weiter
-            <ChevronRight size={26} />
+            <Weiter size={26} />
           </button>
         </div>
       </div>

@@ -7,14 +7,24 @@
 import { useState } from 'react';
 import { DENSITY_LEVELS } from '../../core/constants.ts';
 import type { StitchType } from '../../core/pipeline.ts';
-import { Minus, Plus } from '../Icons.tsx';
+import { Weniger, Hinzufuegen, Fuellstich, Satinstich, Geradstich } from '../Icons.tsx';
 import { StitchPreview } from '../StitchPreview.tsx';
 import type { DesignState } from '../../state/useDesign.ts';
 
-const STITCH_LABELS: { id: StitchType; label: string; hint: string }[] = [
-  { id: 'fill', label: 'Füllung', hint: 'Für Flächen – deckt gut ab.' },
-  { id: 'satin', label: 'Satin', hint: 'Glänzend – für schmale Formen.' },
-  { id: 'outline', label: 'Linie', hint: 'Nur die Umrandung wird gestickt.' },
+const STITCH_LABELS: {
+  id: StitchType;
+  label: string;
+  hint: string;
+  icon: typeof Fuellstich;
+}[] = [
+  { id: 'fill', label: 'Füllung', hint: 'Für Flächen – deckt gut ab.', icon: Fuellstich },
+  { id: 'satin', label: 'Satin', hint: 'Glänzend – für schmale Formen.', icon: Satinstich },
+  {
+    id: 'outline',
+    label: 'Linie',
+    hint: 'Nur die Umrandung wird gestickt.',
+    icon: Geradstich,
+  },
 ];
 
 export function AdvancedScreen({ design, onDone }: { design: DesignState; onDone: () => void }) {
@@ -83,6 +93,7 @@ export function AdvancedScreen({ design, onDone }: { design: DesignState; onDone
                       aria-pressed={area.stitchType === s.id}
                       onClick={() => design.setAreaSetting(area.index, { stitchType: s.id })}
                     >
+                      <s.icon size={24} />
                       {s.label}
                     </button>
                   ))}
@@ -102,7 +113,7 @@ export function AdvancedScreen({ design, onDone }: { design: DesignState; onDone
                       design.setAreaSetting(area.index, { densityLevel: area.densityLevel - 1 })
                     }
                   >
-                    <Minus size={26} />
+                    <Weniger size={26} />
                   </button>
                   <span className="value" style={{ fontSize: 24 }}>
                     {DENSITY_LEVELS[area.densityLevel]?.label}
@@ -116,7 +127,7 @@ export function AdvancedScreen({ design, onDone }: { design: DesignState; onDone
                       design.setAreaSetting(area.index, { densityLevel: area.densityLevel + 1 })
                     }
                   >
-                    <Plus size={26} />
+                    <Hinzufuegen size={26} />
                   </button>
                 </div>
                 <p className="muted">

@@ -7,7 +7,7 @@
  * ganz normal den Dateidialog.
  */
 import { useRef, useState } from 'react';
-import { Bulb, Camera, Folder, Photo } from '../Icons.tsx';
+import { Tipp, Kamera, Dateien, Fotos } from '../Icons.tsx';
 import { loadImageFile } from '../../state/useDesign.ts';
 import type { LoadedImage } from '../../state/useDesign.ts';
 
@@ -40,21 +40,21 @@ export function ImageScreen({ onImage }: Props) {
   const sources = [
     {
       id: 'fotos',
-      icon: <Photo size={72} />,
+      icon: <Fotos size={72} />,
       title: 'Aus meinen Fotos',
       sub: 'Ein Bild aus der Fotos-App auswählen',
       camera: false,
     },
     {
       id: 'dateien',
-      icon: <Folder size={72} />,
+      icon: <Dateien size={72} />,
       title: 'Aus Dateien',
       sub: 'Eine Grafik von iCloud, USB-Stick oder aus einer E-Mail',
       camera: false,
     },
     {
       id: 'kamera',
-      icon: <Camera size={72} />,
+      icon: <Kamera size={72} />,
       title: 'Foto aufnehmen',
       sub: 'Eine Zeichnung oder Vorlage mit der Kamera fotografieren',
       camera: true,
@@ -101,7 +101,7 @@ export function ImageScreen({ onImage }: Props) {
       )}
 
       <p className="tip">
-        <Bulb size={40} />
+        <Tipp size={40} />
         <span>
           <strong>Tipp:</strong> Am schönsten werden einfache Bilder mit klaren Flächen und wenigen
           Farben – zum Beispiel Zeichnungen, Logos oder Schriftzüge.

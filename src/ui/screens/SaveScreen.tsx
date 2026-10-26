@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { sanitizeName } from '../../core/export.ts';
 import type { ExportedFile } from '../../core/export.ts';
 import { planThumbnail } from '../drawPlan.ts';
-import { Check, UsbStick } from '../Icons.tsx';
+import { Fertig, UsbStick } from '../Icons.tsx';
 import type { DesignState } from '../../state/useDesign.ts';
 
 interface Props {
@@ -81,7 +81,7 @@ export function SaveScreen({ design, onFinish }: Props) {
           {saved ? (
             <div className="done-panel">
               <span className="check">
-                <Check size={64} />
+                <Fertig size={64} />
               </span>
               <strong style={{ fontSize: 34 }}>Gespeichert!</strong>
               <p className="muted" style={{ fontSize: 22 }}>
