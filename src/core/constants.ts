@@ -46,13 +46,36 @@ export const SATIN_SPACING_MM = 0.4;
 /** Oberhalb dieser Breite neigt Satin zu losen Schlaufen -> Füllstich. */
 export const SATIN_MAX_WIDTH_MM = 10.0;
 
-/** Rahmen der Bernina B 590. */
+/** Rahmen der Bernina B 590, in der Reihenfolge des Entwurfs. */
 export const HOOPS = [
+  { id: 'klein', name: 'Klein', widthMm: 72, heightMm: 50 },
+  { id: 'mittel', name: 'Mittel', widthMm: 100, heightMm: 130 },
   { id: 'midi', name: 'Midi', widthMm: 265, heightMm: 165 },
-  { id: 'mega', name: 'Mega', widthMm: 400, heightMm: 150 },
 ] as const;
 
 export type HoopId = (typeof HOOPS)[number]['id'];
+
+export function hoopById(id: HoopId) {
+  return HOOPS.find((h) => h.id === id) ?? HOOPS[2];
+}
+
+/**
+ * Dichtestufen für die erweiterten Einstellungen. Die Oberfläche zeigt
+ * Worte, der Kern rechnet mit Reihenabständen; Stufe 2 ist die Vorgabe.
+ */
+export const DENSITY_LEVELS = [
+  { label: 'Sehr locker', spacingMm: 0.6 },
+  { label: 'Locker', spacingMm: 0.5 },
+  { label: 'Normal', spacingMm: FILL_SPACING_MM },
+  { label: 'Dicht', spacingMm: 0.33 },
+  { label: 'Sehr dicht', spacingMm: 0.28 },
+] as const;
+
+export const DEFAULT_DENSITY_LEVEL = 2;
+
+/** Größenraster des Plus-Minus-Knopfs. */
+export const SIZE_STEP_MM = 5;
+export const MIN_SIZE_MM = 20;
 
 /** Vorschaubild für das Maschinendisplay. */
 export const BMP_MM_PER_PIXEL = 0.4;

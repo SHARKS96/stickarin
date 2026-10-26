@@ -130,3 +130,53 @@ export function centerPlan(plan: StitchPlan): StitchPlan {
   const b = planBounds(plan);
   return translatePlan(plan, -(b.minX + b.maxX) / 2, -(b.minY + b.maxY) / 2);
 }
+
+/**
+ * Der Stichplan als typisierte Felder.
+ *
+ * Ein Motiv hat schnell zehntausend Einträge. Als Objektliste durch den
+ * Structured-Clone-Algorithmus zu schicken kostet mehr als die Rechnung
+ * selbst; als drei typisierte Felder ist es ein Speicherblock, der sich
+ * sogar übertragen statt kopieren lässt.
+ */
+export interface CompactPlan {
+  kinds: Uint8Array;
+  xs: Float32Array;
+  ys: Float32Array;
+  threads: ThreadColor[];
+}
+
+const KIND_CODES: Record<StitchKind, number> = {
+  stitch: 0,
+  jump: 1,
+  trim: 2,
+  colorChange: 3,
+};
+
+const KIND_NAMES: StitchKind[] = ['stitch', 'jump', 'trim', 'colorChange'];
+
+export function toCompactPlan(plan: StitchPlan): CompactPlan {
+  const n = plan.entries.length;
+  const kinds = new Uint8Array(n);
+  const xs = new Float32Array(n);
+  const ys = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const e = plan.entries[i] as PlanEntry;
+    kinds[i] = KIND_CODES[e.kind];
+    xs[i] = e.x;
+    ys[i] = e.y;
+  }
+  return { kinds, xs, ys, threads: plan.threads };
+}
+
+export function fromCompactPlan(compact: CompactPlan): StitchPlan {
+  const entries: PlanEntry[] = new Array(compact.kinds.length);
+  for (let i = 0; i < compact.kinds.length; i++) {
+    entries[i] = {
+      kind: KIND_NAMES[compact.kinds[i] as number] as StitchKind,
+      x: compact.xs[i] as number,
+      y: compact.ys[i] as number,
+    };
+  }
+  return { entries, threads: compact.threads };
+}

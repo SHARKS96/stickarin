@@ -1,71 +1,151 @@
 /**
- * Vier Schritte, immer nur einer sichtbar: Bild, Farben, Vorschau, Speichern.
- * Zurück und Weiter liegen unten als feste Leiste — auf dem iPad gut erreichbar.
+ * Die Wege durch die App.
+ *
+ * Fünf Schritte in einer Reihe, dazu zwei Abzweige, die nur auf Wunsch
+ * erscheinen: „Farbe anpassen“ und „Erweiterte Einstellungen“. Jeder
+ * Schirm hat dieselbe Kopfleiste mit Zurück, Fortschritt und Hilfe.
  */
 import { useState } from 'react';
+import { HelpDialog, TopBar } from './ui/Shell.tsx';
 import { useDesign } from './state/useDesign.ts';
-import { ImportStep } from './ui/ImportStep.tsx';
-import { ColorStep } from './ui/ColorStep.tsx';
-import { PreviewStep } from './ui/PreviewStep.tsx';
-import { ExportStep } from './ui/ExportStep.tsx';
+import { START_HELP, StartScreen } from './ui/screens/StartScreen.tsx';
+import { IMAGE_HELP, ImageScreen } from './ui/screens/ImageScreen.tsx';
+import { SIZE_HELP, SizeScreen } from './ui/screens/SizeScreen.tsx';
+import { COLORS_HELP, ColorsScreen } from './ui/screens/ColorsScreen.tsx';
+import { ADJUST_HELP, ColorAdjustScreen } from './ui/screens/ColorAdjustScreen.tsx';
+import { PREVIEW_HELP, PreviewScreen } from './ui/screens/PreviewScreen.tsx';
+import { ADVANCED_HELP, AdvancedScreen } from './ui/screens/AdvancedScreen.tsx';
+import { SAVE_HELP, SaveScreen } from './ui/screens/SaveScreen.tsx';
 
-const STEPS = [
-  { id: 'bild', label: 'Bild' },
-  { id: 'farben', label: 'Farben' },
-  { id: 'vorschau', label: 'Vorschau' },
-  { id: 'speichern', label: 'Speichern' },
-] as const;
+type Screen = 'start' | 'image' | 'size' | 'colors' | 'adjust' | 'preview' | 'advanced' | 'save';
+
+/** Welcher der fünf Schritte in der Kopfleiste leuchtet; null = Startseite. */
+const STEP_OF: Record<Screen, number | null> = {
+  start: null,
+  image: 0,
+  size: 1,
+  colors: 2,
+  adjust: 2,
+  preview: 3,
+  advanced: 3,
+  save: 4,
+};
+
+const HELP: Record<Screen, { title: string; steps: React.ReactNode[] }> = {
+  start: { title: 'So funktioniert die App', steps: START_HELP },
+  image: { title: 'Hilfe: Bild auswählen', steps: IMAGE_HELP },
+  size: { title: 'Hilfe: Größe einstellen', steps: SIZE_HELP },
+  colors: { title: 'Hilfe: Farben', steps: COLORS_HELP },
+  adjust: { title: 'Hilfe: Farbe anpassen', steps: ADJUST_HELP },
+  preview: { title: 'Hilfe: Vorschau', steps: PREVIEW_HELP },
+  advanced: { title: 'Hilfe: Erweiterte Einstellungen', steps: ADVANCED_HELP },
+  save: { title: 'Hilfe: Speichern', steps: SAVE_HELP },
+};
+
+/** Wohin „Zurück“ führt. Auf der Startseite gibt es keinen Weg zurück. */
+const BACK_TO: Record<Screen, Screen | null> = {
+  start: null,
+  image: 'start',
+  size: 'image',
+  colors: 'size',
+  adjust: 'colors',
+  preview: 'colors',
+  advanced: 'preview',
+  save: 'preview',
+};
 
 export function App() {
   const design = useDesign();
-  const [step, setStep] = useState(0);
+  const [screen, setScreen] = useState<Screen>('start');
+  const [adjusting, setAdjusting] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
 
-  const canAdvance =
-    (step === 0 && design.image !== null) ||
-    (step === 1 && design.colors.length > 0) ||
-    (step === 2 && design.plan !== null);
+  const back = BACK_TO[screen];
+  const help = HELP[screen];
 
   return (
     <div className="app">
-      <header className="topbar">
-        <h1>Stick-Karin</h1>
-        <nav aria-label="Arbeitsschritte">
-          <ol className="steps">
-            {STEPS.map((s, i) => (
-              <li key={s.id} aria-current={i === step ? 'step' : undefined} data-done={i < step}>
-                <span className="step-number">{i + 1}</span>
-                <span>{s.label}</span>
-              </li>
-            ))}
-          </ol>
-        </nav>
-      </header>
+      <TopBar
+        step={STEP_OF[screen]}
+        onBack={back ? () => setScreen(back) : undefined}
+        onHelp={() => setHelpOpen(true)}
+      />
 
-      <main>
-        {step === 0 && <ImportStep image={design.image} onImage={design.setImage} />}
-        {step === 1 && <ColorStep design={design} />}
-        {step === 2 && <PreviewStep design={design} />}
-        {step === 3 && <ExportStep design={design} />}
-      </main>
+      {screen === 'start' && (
+        <StartScreen
+          gallery={design.gallery}
+          onNew={() => {
+            design.setImage(null);
+            setScreen('image');
+          }}
+          onOpen={(id) => {
+            void design.open(id).then((ok) => ok && setScreen('size'));
+          }}
+          onForget={(id) => void design.forget(id)}
+        />
+      )}
 
-      <div className="actions">
-        <button
-          type="button"
-          className="ghost"
-          onClick={() => setStep((s) => s - 1)}
-          disabled={step === 0}
-        >
-          Zurück
-        </button>
-        <button
-          type="button"
-          className="primary"
-          onClick={() => setStep((s) => s + 1)}
-          disabled={step === STEPS.length - 1 || !canAdvance}
-        >
-          Weiter
-        </button>
-      </div>
+      {screen === 'image' && (
+        <ImageScreen
+          onImage={(img) => {
+            design.setImage(img);
+            design.setDesignName(img.name || 'Stickbild');
+            setScreen('size');
+          }}
+        />
+      )}
+
+      {screen === 'size' && <SizeScreen design={design} onNext={() => setScreen('colors')} />}
+
+      {screen === 'colors' && (
+        <ColorsScreen
+          design={design}
+          onAdjust={(index) => {
+            setAdjusting(index);
+            setScreen('adjust');
+          }}
+          onNext={() => setScreen('preview')}
+        />
+      )}
+
+      {screen === 'adjust' && (
+        <ColorAdjustScreen
+          design={design}
+          colorIndex={adjusting}
+          onDone={() => setScreen('colors')}
+          onCancel={() => {
+            design.clearIgnoredSamples();
+            setScreen('colors');
+          }}
+        />
+      )}
+
+      {screen === 'preview' && (
+        <PreviewScreen
+          design={design}
+          onAdvanced={() => setScreen('advanced')}
+          onNext={() => setScreen('save')}
+        />
+      )}
+
+      {screen === 'advanced' && (
+        <AdvancedScreen design={design} onDone={() => setScreen('preview')} />
+      )}
+
+      {screen === 'save' && <SaveScreen design={design} onFinish={() => setScreen('start')} />}
+
+      <HelpDialog
+        open={helpOpen}
+        title={help.title}
+        steps={help.steps}
+        onClose={() => setHelpOpen(false)}
+      />
+
+      {design.error && (
+        <p className="notice" data-kind="error" role="alert" style={{ margin: '0 32px 24px' }}>
+          {design.error}
+        </p>
+      )}
     </div>
   );
 }

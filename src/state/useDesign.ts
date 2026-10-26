@@ -1,30 +1,37 @@
 /**
  * Der gesamte Zustand der App an einer Stelle.
  *
- * Die schwere Rechnerei (Farbreduktion, Vektorisieren, Stiche) hängt an
- * `useMemo`. Für große Motive gehört das später in einen Web Worker —
- * solange es ruckelt, merkt man es nur beim Schieben der Regler.
+ * Gerechnet wird im Worker: Dieser Hook sammelt die Einstellungen, schickt
+ * sie los und hält das Ergebnis. Die Oberfläche kennt nur noch Werte und
+ * Setter.
  */
-import { useCallback, useMemo, useState } from 'react';
-import { HOOPS } from '../core/constants.ts';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  DEFAULT_DENSITY_LEVEL,
+  DENSITY_LEVELS,
+  hoopById,
+  MIN_SIZE_MM,
+  SIZE_STEP_MM,
+} from '../core/constants.ts';
 import type { HoopId } from '../core/constants.ts';
-import { buildPlan, defaultSettingsFor } from '../core/pipeline.ts';
-import type { AreaSettings, ColorPlanInput } from '../core/pipeline.ts';
-import { planStats } from '../core/types.ts';
-import type { StitchPlan, ThreadColor } from '../core/types.ts';
+import type { AreaSettings, StitchType } from '../core/pipeline.ts';
+import type { ExportedFile } from '../core/export.ts';
+import type { PlanStats, StitchPlan } from '../core/types.ts';
 import { toHex } from '../image/color.ts';
 import type { Rgb } from '../image/color.ts';
-import { quantize } from '../image/quantize.ts';
-import { traceAreas } from '../image/trace.ts';
-import type { TracedArea } from '../image/trace.ts';
+import type { AreaInfo, WorkImage } from '../worker/protocol.ts';
+import { useStitchWorker } from './useStitchWorker.ts';
+import { deleteDesign, listDesigns, loadDesign, saveDesign } from './storage.ts';
+import type { SavedDesign, SavedDesignSummary } from './storage.ts';
 
 /** Oberhalb dieser Breite wird das Bild vor dem Rechnen verkleinert. */
 const WORK_WIDTH = 360;
 
 export interface LoadedImage {
   name: string;
-  data: ImageData;
-  /** Vorschau fürs Anzeigen, unabhängig von der verkleinerten Arbeitskopie. */
+  /** Verkleinerte Arbeitskopie; alles rechnet darauf. */
+  work: WorkImage;
+  /** Für die Anzeige, inklusive Pipette. */
   previewUrl: string;
 }
 
@@ -38,164 +45,285 @@ export interface ColorEntry {
   ignored: boolean;
 }
 
-export interface DesignState {
-  image: LoadedImage | null;
-  setImage: (img: LoadedImage | null) => void;
-
-  colorCount: number;
-  setColorCount: (n: number) => void;
-  tolerance: number;
-  setTolerance: (n: number) => void;
-
-  ignoredSamples: Rgb[];
-  addIgnoredSample: (rgb: Rgb) => void;
-  clearIgnoredSamples: () => void;
-
-  widthMm: number;
-  setWidthMm: (mm: number) => void;
-  hoopId: HoopId;
-  setHoopId: (id: HoopId) => void;
-  heightMm: number;
-  fitsHoop: boolean;
-
-  designName: string;
-  setDesignName: (s: string) => void;
-
-  colors: ColorEntry[];
-  setColorName: (index: number, name: string) => void;
-  toggleColorIgnored: (index: number) => void;
-  moveColor: (index: number, direction: -1 | 1) => void;
-
-  areas: TracedArea[];
-  areaSettings: Record<number, AreaSettings>;
-  setAreaSetting: (areaIndex: number, patch: Partial<AreaSettings>) => void;
-  resetAreaSettings: () => void;
-
-  plan: StitchPlan | null;
-  stats: ReturnType<typeof planStats> | null;
+/** Einstellungen einer Fläche, wie sie der Schirm „Erweitert“ zeigt. */
+export interface AreaView extends AreaInfo {
+  index: number;
+  stitchType: StitchType;
+  densityLevel: number;
+  raised: boolean;
 }
 
-export function useDesign(): DesignState {
+export function useDesign() {
+  const worker = useStitchWorker();
+
   const [image, setImageRaw] = useState<LoadedImage | null>(null);
-  const [colorCount, setColorCount] = useState(4);
-  const [tolerance, setTolerance] = useState(12);
-  const [ignoredSamples, setIgnoredSamples] = useState<Rgb[]>([]);
-  const [widthMm, setWidthMm] = useState(100);
+  const [designId, setDesignId] = useState<string | null>(null);
+  const [designName, setDesignName] = useState('Stickbild');
+
+  const [widthMm, setWidthMmRaw] = useState(80);
   const [hoopId, setHoopId] = useState<HoopId>('midi');
-  const [designName, setDesignName] = useState('STICK');
-  const [nameOverrides, setNameOverrides] = useState<Record<number, string>>({});
+  const [rotationDeg, setRotationDeg] = useState(0);
+
+  const [colorCount, setColorCountRaw] = useState(4);
+  const [tolerance, setTolerance] = useState(30);
+  const [ignoredSamples, setIgnoredSamples] = useState<Rgb[]>([]);
+  const [colorNames, setColorNames] = useState<Record<number, string>>({});
   const [ignoredColors, setIgnoredColors] = useState<Record<number, boolean>>({});
   const [order, setOrder] = useState<number[] | null>(null);
-  const [areaSettings, setAreaSettings] = useState<Record<number, AreaSettings>>({});
+  const [areaOverrides, setAreaOverrides] = useState<Record<number, AreaSettings>>({});
 
-  const setImage = useCallback((img: LoadedImage | null) => {
-    setImageRaw((prev) => {
-      if (prev) URL.revokeObjectURL(prev.previewUrl);
-      return img;
-    });
-    // Ein neues Bild setzt alle Ableitungen zurück.
-    setNameOverrides({});
+  const [gallery, setGallery] = useState<SavedDesignSummary[]>([]);
+  const refreshGallery = useCallback(() => {
+    void listDesigns().then(setGallery);
+  }, []);
+  useEffect(refreshGallery, [refreshGallery]);
+
+  const resetDerived = useCallback(() => {
+    setColorNames({});
     setIgnoredColors({});
     setOrder(null);
-    setAreaSettings({});
+    setAreaOverrides({});
     setIgnoredSamples([]);
   }, []);
 
-  // --- Farbreduktion -------------------------------------------------
-  const quantized = useMemo(() => {
-    if (!image) return null;
-    const small = downscale(image.data, WORK_WIDTH);
-    return quantize(small.data, small.width, small.height, {
-      colors: colorCount,
-      ignored: ignoredSamples,
-      tolerance,
-    });
-  }, [image, colorCount, tolerance, ignoredSamples]);
+  // Der Hintergrund wird je Bild genau einmal automatisch ausgeschaltet.
+  // Danach gehört die Entscheidung dem Nutzer, auch wenn er ihn wieder
+  // anschaltet und an den Reglern dreht.
+  const autoBackgroundDone = useRef(false);
 
-  // --- Vektorisieren --------------------------------------------------
-  const areas = useMemo(() => {
-    if (!quantized || quantized.palette.length === 0) return [];
-    const mmPerPixel = widthMm / quantized.width;
-    return traceAreas(quantized, { mmPerPixel });
-  }, [quantized, widthMm]);
+  const setImage = useCallback(
+    (img: LoadedImage | null) => {
+      setImageRaw((prev) => {
+        if (prev) URL.revokeObjectURL(prev.previewUrl);
+        return img;
+      });
+      setDesignId(null);
+      autoBackgroundDone.current = false;
+      resetDerived();
+    },
+    [resetDerived],
+  );
+
+  const backgroundIndex = worker.result?.backgroundIndex ?? null;
+  useEffect(() => {
+    if (autoBackgroundDone.current || backgroundIndex === null) return;
+    autoBackgroundDone.current = true;
+    setIgnoredColors((m) => ({ ...m, [backgroundIndex]: true }));
+  }, [backgroundIndex]);
 
   // --- Farbliste ------------------------------------------------------
   const colors = useMemo<ColorEntry[]>(() => {
-    if (!quantized) return [];
-    const base = quantized.palette.map((rgb, index) => ({
+    const palette = worker.result?.palette ?? [];
+    const counts = worker.result?.counts ?? [];
+    const base = palette.map((rgb, index) => ({
       index,
       rgb,
       hex: toHex(rgb),
-      pixels: quantized.counts[index] ?? 0,
-      name: nameOverrides[index] ?? `Farbe ${index + 1}`,
+      pixels: counts[index] ?? 0,
+      name: colorNames[index] ?? defaultColorName(rgb, index),
       catalog: 'Stick-Karin',
       ignored: ignoredColors[index] ?? false,
     }));
     if (!order) return base;
-    // Eine gespeicherte Reihenfolge anwenden, unbekannte Indizes hinten anhängen.
     const byIndex = new Map(base.map((c) => [c.index, c]));
     const sorted = order.map((i) => byIndex.get(i)).filter((c): c is ColorEntry => Boolean(c));
-    const missing = base.filter((c) => !order.includes(c.index));
-    return [...sorted, ...missing];
-  }, [quantized, nameOverrides, ignoredColors, order]);
+    return [...sorted, ...base.filter((c) => !order.includes(c.index))];
+  }, [worker.result, colorNames, ignoredColors, order]);
 
-  // --- Stichplan ------------------------------------------------------
-  const plan = useMemo<StitchPlan | null>(() => {
-    if (areas.length === 0 || colors.length === 0) return null;
-    const inputs: ColorPlanInput[] = [];
-    colors.forEach((color) => {
-      if (color.ignored) return;
-      const own = areas.filter((a) => a.colorIndex === color.index);
-      if (own.length === 0) return;
-      const thread: ThreadColor = {
-        r: color.rgb.r,
-        g: color.rgb.g,
-        b: color.rgb.b,
-        name: color.name,
-        catalog: color.catalog,
+  // --- Flächen --------------------------------------------------------
+  const areas = useMemo<AreaView[]>(() => {
+    const infos = worker.result?.areas ?? [];
+    return infos.map((info, index) => {
+      const override = areaOverrides[index];
+      const spacing = override?.spacing ?? info.defaults.spacing;
+      return {
+        ...info,
+        index,
+        stitchType: override?.stitchType ?? info.defaults.stitchType,
+        densityLevel: override ? nearestDensityLevel(spacing) : DEFAULT_DENSITY_LEVEL,
+        raised: (override?.raisedLayers ?? 0) > 0,
       };
-      inputs.push({
-        thread,
-        areas: own,
-        settings: own.map((a) => areaSettings[areas.indexOf(a)] ?? defaultSettingsFor(a.shape)),
-      });
     });
-    if (inputs.length === 0) return null;
-    return buildPlan(inputs);
-  }, [areas, colors, areaSettings]);
+  }, [worker.result, areaOverrides]);
 
-  const stats = useMemo(() => (plan ? planStats(plan) : null), [plan]);
+  // --- Rechnung anstoßen ----------------------------------------------
+  // Der Worker bekommt immer den vollständigen Satz Einstellungen; was
+  // sich geändert hat, muss hier niemand wissen.
+  const colorsRef = useRef(colors);
+  colorsRef.current = colors;
 
-  const heightMm = useMemo(() => {
-    if (!quantized) return 0;
-    return (widthMm * quantized.height) / quantized.width;
-  }, [quantized, widthMm]);
+  useEffect(() => {
+    if (!image) return;
+    worker.compute(image.work, {
+      colorCount,
+      tolerance,
+      ignoredSamples,
+      widthMm,
+      colors: colorsRef.current.map((c) => ({
+        index: c.index,
+        name: c.name,
+        catalog: c.catalog,
+        ignored: c.ignored,
+      })),
+      areaSettings: areaOverrides,
+    });
+    // `colors` hängt am Ergebnis des Workers; es hier mitzuhorchen würde
+    // jede Antwort sofort eine neue Anfrage auslösen. Darum über die Ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    image,
+    colorCount,
+    tolerance,
+    ignoredSamples,
+    widthMm,
+    areaOverrides,
+    colorNames,
+    ignoredColors,
+    order,
+  ]);
 
-  const hoop = HOOPS.find((h) => h.id === hoopId) ?? HOOPS[0];
-  const fitsHoop = widthMm <= hoop.widthMm && heightMm <= hoop.heightMm;
+  // --- Abgeleitete Größen ---------------------------------------------
+  const hoop = hoopById(hoopId);
+  const aspect = image ? image.work.height / image.work.width : 1;
+  const rotated = rotationDeg % 180 !== 0;
+  const heightMm = widthMm * aspect;
+  const outerWidth = rotated ? heightMm : widthMm;
+  const outerHeight = rotated ? widthMm : heightMm;
+  const fitsHoop = outerWidth <= hoop.widthMm && outerHeight <= hoop.heightMm;
+
+  /** Größte Breite, die in den gewählten Rahmen passt. */
+  const maxWidthMm = useMemo(() => {
+    const byWidth = rotated ? hoop.heightMm : hoop.widthMm;
+    const byHeight = (rotated ? hoop.widthMm : hoop.heightMm) / aspect;
+    return Math.floor(Math.min(byWidth, byHeight) / SIZE_STEP_MM) * SIZE_STEP_MM;
+  }, [hoop, aspect, rotated]);
+
+  const setWidthMm = useCallback(
+    (mm: number) => setWidthMmRaw(clamp(mm, MIN_SIZE_MM, Math.max(MIN_SIZE_MM, maxWidthMm))),
+    [maxWidthMm],
+  );
+
+  // Rahmenwechsel oder Drehung kann das Motiv zu groß machen.
+  useEffect(() => {
+    setWidthMmRaw((w) => clamp(w, MIN_SIZE_MM, Math.max(MIN_SIZE_MM, maxWidthMm)));
+  }, [maxWidthMm]);
+
+  // --- Speichern ------------------------------------------------------
+  const exportFiles = useCallback((name: string) => worker.exportFiles(name), [worker]);
+
+  const remember = useCallback(
+    async (thumbnail: string) => {
+      if (!image) return;
+      const id = designId ?? crypto.randomUUID();
+      setDesignId(id);
+      const saved: SavedDesign = {
+        id,
+        name: designName,
+        savedAt: Date.now(),
+        thumbnail,
+        image: { data: image.work.data, width: image.work.width, height: image.work.height },
+        settings: {
+          widthMm,
+          hoopId,
+          rotationDeg,
+          colorCount,
+          tolerance,
+          ignoredSamples,
+          colorNames,
+          ignoredColors,
+          order,
+          areaSettings: areaOverrides,
+        },
+      };
+      if (await saveDesign(saved)) refreshGallery();
+    },
+    [
+      image,
+      designId,
+      designName,
+      widthMm,
+      hoopId,
+      rotationDeg,
+      colorCount,
+      tolerance,
+      ignoredSamples,
+      colorNames,
+      ignoredColors,
+      order,
+      areaOverrides,
+      refreshGallery,
+    ],
+  );
+
+  const open = useCallback(async (id: string) => {
+    const saved = await loadDesign(id);
+    if (!saved) return false;
+    const work: WorkImage = {
+      data: new Uint8ClampedArray(saved.image.data),
+      width: saved.image.width,
+      height: saved.image.height,
+    };
+    setImageRaw((prev) => {
+      if (prev) URL.revokeObjectURL(prev.previewUrl);
+      return { name: saved.name, work, previewUrl: saved.thumbnail };
+    });
+    setDesignId(saved.id);
+    setDesignName(saved.name);
+    const s = saved.settings;
+    setWidthMmRaw(s.widthMm);
+    setHoopId(s.hoopId);
+    setRotationDeg(s.rotationDeg);
+    setColorCountRaw(s.colorCount);
+    setTolerance(s.tolerance);
+    setIgnoredSamples(s.ignoredSamples);
+    setColorNames(s.colorNames);
+    setIgnoredColors(s.ignoredColors);
+    setOrder(s.order);
+    setAreaOverrides(s.areaSettings);
+    return true;
+  }, []);
+
+  const forget = useCallback(
+    async (id: string) => {
+      await deleteDesign(id);
+      refreshGallery();
+    },
+    [refreshGallery],
+  );
 
   return {
+    // Bild
     image,
     setImage,
-    colorCount,
-    setColorCount,
-    tolerance,
-    setTolerance,
-    ignoredSamples,
-    addIgnoredSample: (rgb) => setIgnoredSamples((s) => [...s, rgb]),
-    clearIgnoredSamples: () => setIgnoredSamples([]),
-    widthMm,
-    setWidthMm,
-    hoopId,
-    setHoopId,
-    heightMm,
-    fitsHoop,
     designName,
     setDesignName,
+
+    // Größe
+    widthMm,
+    setWidthMm,
+    heightMm,
+    outerWidth,
+    outerHeight,
+    maxWidthMm,
+    hoopId,
+    setHoopId,
+    hoop,
+    rotationDeg,
+    rotate: () => setRotationDeg((d) => (d + 90) % 360),
+    fitsHoop,
+
+    // Farben
+    colorCount,
+    setColorCount: (n: number) => setColorCountRaw(clamp(n, 1, 8)),
+    tolerance,
+    setTolerance: (n: number) => setTolerance(clamp(n, 0, 100)),
+    ignoredSamples,
+    addIgnoredSample: (rgb: Rgb) => setIgnoredSamples((s) => [...s, rgb]),
+    clearIgnoredSamples: () => setIgnoredSamples([]),
     colors,
-    setColorName: (index, name) => setNameOverrides((m) => ({ ...m, [index]: name })),
-    toggleColorIgnored: (index) => setIgnoredColors((m) => ({ ...m, [index]: !m[index] })),
-    moveColor: (index, direction) =>
+    setColorName: (index: number, name: string) => setColorNames((m) => ({ ...m, [index]: name })),
+    toggleColorIgnored: (index: number) => setIgnoredColors((m) => ({ ...m, [index]: !m[index] })),
+    moveColor: (index: number, direction: -1 | 1) =>
       setOrder(() => {
         const current = colors.map((c) => c.index);
         const at = current.indexOf(index);
@@ -206,39 +334,137 @@ export function useDesign(): DesignState {
         next.splice(to, 0, index);
         return next;
       }),
+
+    // Flächen
     areas,
-    areaSettings,
-    setAreaSetting: (areaIndex, patch) =>
-      setAreaSettings((m) => {
-        const area = areas[areaIndex];
-        if (!area) return m;
-        const base = m[areaIndex] ?? defaultSettingsFor(area.shape);
-        return { ...m, [areaIndex]: { ...base, ...patch } };
-      }),
-    resetAreaSettings: () => setAreaSettings({}),
-    plan,
-    stats,
+    setAreaSetting,
+    resetAreaSettings: () => setAreaOverrides({}),
+
+    // Ergebnis
+    plan: worker.result?.plan ?? null,
+    stats: worker.result?.stats ?? null,
+    busy: worker.busy,
+    error: worker.error,
+
+    // Speichern und Galerie
+    exportFiles,
+    remember,
+    gallery,
+    open,
+    forget,
   };
+
+  function setAreaSetting(
+    index: number,
+    patch: { stitchType?: StitchType; densityLevel?: number; raised?: boolean },
+  ) {
+    setAreaOverrides((m) => {
+      const info = worker.result?.areas[index];
+      if (!info) return m;
+      const base = m[index] ?? info.defaults;
+      const level =
+        patch.densityLevel ??
+        (m[index] ? nearestDensityLevel(base.spacing) : DEFAULT_DENSITY_LEVEL);
+      const raised = patch.raised ?? base.raisedLayers > 0;
+      return {
+        ...m,
+        [index]: {
+          stitchType: patch.stitchType ?? base.stitchType,
+          spacing: (
+            DENSITY_LEVELS[clamp(level, 0, DENSITY_LEVELS.length - 1)] as { spacingMm: number }
+          ).spacingMm,
+          angle: base.angle,
+          // Zwei Zusatzlagen, so wie in TEST2 Feld 3.
+          raisedLayers: raised ? 2 : 0,
+        },
+      };
+    });
+  }
 }
 
-/** Verkleinert die Arbeitskopie, damit die Regler flüssig bleiben. */
-function downscale(src: ImageData, maxWidth: number): ImageData {
-  if (src.width <= maxWidth) return src;
-  const scale = maxWidth / src.width;
-  const w = Math.max(1, Math.round(src.width * scale));
-  const h = Math.max(1, Math.round(src.height * scale));
-  const out = new Uint8ClampedArray(w * h * 4);
-  for (let y = 0; y < h; y++) {
-    const sy = Math.min(src.height - 1, Math.floor(y / scale));
-    for (let x = 0; x < w; x++) {
-      const sx = Math.min(src.width - 1, Math.floor(x / scale));
-      const si = (sy * src.width + sx) * 4;
-      const di = (y * w + x) * 4;
-      out[di] = src.data[si] as number;
-      out[di + 1] = src.data[si + 1] as number;
-      out[di + 2] = src.data[si + 2] as number;
-      out[di + 3] = src.data[si + 3] as number;
+export type DesignState = ReturnType<typeof useDesign>;
+export type { StitchPlan, PlanStats, ExportedFile };
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function nearestDensityLevel(spacingMm: number): number {
+  let best = DEFAULT_DENSITY_LEVEL;
+  let bestD = Infinity;
+  DENSITY_LEVELS.forEach((l, i) => {
+    const d = Math.abs(l.spacingMm - spacingMm);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
     }
+  });
+  return best;
+}
+
+/** Ein Name, mit dem man am Garnschrank etwas anfangen kann. */
+export function defaultColorName(rgb: Rgb, index: number): string {
+  const { r, g, b } = rgb;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const light = max / 255;
+  const saturation = max === 0 ? 0 : (max - min) / max;
+
+  if (saturation < 0.12) {
+    if (light > 0.9) return 'Weiß';
+    if (light > 0.65) return 'Hellgrau';
+    if (light > 0.35) return 'Grau';
+    if (light > 0.12) return 'Dunkelgrau';
+    return 'Schwarz';
   }
-  return new ImageData(out, w, h);
+
+  const hue = hueOf(r, g, b);
+  const names: [number, string][] = [
+    [15, 'Rot'],
+    [40, 'Orange'],
+    [70, 'Gelb'],
+    [160, 'Grün'],
+    [200, 'Türkis'],
+    [255, 'Blau'],
+    [290, 'Violett'],
+    [340, 'Pink'],
+    [360, 'Rot'],
+  ];
+  const base = names.find(([limit]) => hue < limit)?.[1] ?? `Farbe ${index + 1}`;
+  if (light < 0.4) return `Dunkel${base.toLowerCase()}`;
+  if (light > 0.85 && saturation < 0.45) return `Hell${base.toLowerCase()}`;
+  return base;
+}
+
+function hueOf(r: number, g: number, b: number): number {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  if (d === 0) return 0;
+  let h: number;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  h *= 60;
+  return h < 0 ? h + 360 : h;
+}
+
+/** Datei -> verkleinerte Arbeitskopie plus Vorschau-URL. */
+export async function loadImageFile(file: File): Promise<LoadedImage> {
+  const previewUrl = URL.createObjectURL(file);
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement('canvas');
+  const scale = Math.min(1, WORK_WIDTH / bitmap.width);
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw new Error('Kein 2D-Kontext verfügbar.');
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  return {
+    name: file.name.replace(/\.[^.]+$/, ''),
+    work: { data: data.data, width: canvas.width, height: canvas.height },
+    previewUrl,
+  };
 }
