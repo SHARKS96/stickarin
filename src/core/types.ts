@@ -106,3 +106,27 @@ export function planStats(plan: StitchPlan): PlanStats {
     heightMm: b.maxY - b.minY,
   };
 }
+
+/** Verschiebt den ganzen Stichplan. */
+export function translatePlan(plan: StitchPlan, dx: number, dy: number): StitchPlan {
+  return {
+    threads: plan.threads,
+    entries: plan.entries.map((e) =>
+      e.kind === 'trim' || e.kind === 'colorChange' ? e : { ...e, x: e.x + dx, y: e.y + dy },
+    ),
+  };
+}
+
+/**
+ * Legt die Mitte des Motivs auf den Nullpunkt.
+ *
+ * Eine EXP beginnt bei (0,0) — dort steht der Rahmen, wenn die Maschine
+ * anfängt. Liegt das Motiv weit davon entfernt, fährt die Maschine erst
+ * einen langen Weg dorthin, und dieser Weg gehört zur Ausdehnung der
+ * Datei. Zentriert ist der Anfahrtsweg kurz und liegt innerhalb des
+ * Motivs; außerdem sitzt das Motiv so mittig im Rahmen.
+ */
+export function centerPlan(plan: StitchPlan): StitchPlan {
+  const b = planBounds(plan);
+  return translatePlan(plan, -(b.minX + b.maxX) / 2, -(b.minY + b.maxY) / 2);
+}

@@ -3,6 +3,7 @@
  * Ohne .INF zeigt die Maschine Standardfarben, ohne .BMP kein Vorschaubild.
  */
 import { writeBmp, writeExp, writeInf } from './format/index.ts';
+import { centerPlan } from './types.ts';
 import type { StitchPlan } from './types.ts';
 
 export interface ExportedFile {
@@ -18,10 +19,12 @@ export interface ExportedFile {
  */
 export function exportDesign(plan: StitchPlan, rawName: string): ExportedFile[] {
   const name = sanitizeName(rawName);
+  // Alle drei Dateien beschreiben dasselbe zentrierte Motiv.
+  const centered = centerPlan(plan);
   return [
-    { name: `${name}.EXP`, type: 'application/octet-stream', bytes: writeExp(plan) },
-    { name: `${name}.INF`, type: 'application/octet-stream', bytes: writeInf(plan.threads) },
-    { name: `${name}.BMP`, type: 'image/bmp', bytes: writeBmp(plan) },
+    { name: `${name}.EXP`, type: 'application/octet-stream', bytes: writeExp(centered) },
+    { name: `${name}.INF`, type: 'application/octet-stream', bytes: writeInf(centered.threads) },
+    { name: `${name}.BMP`, type: 'image/bmp', bytes: writeBmp(centered) },
   ];
 }
 

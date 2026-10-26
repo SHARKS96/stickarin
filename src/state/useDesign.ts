@@ -157,7 +157,7 @@ export function useDesign(): DesignState {
       inputs.push({
         thread,
         areas: own,
-        settings: own.map((a) => areaSettings[areas.indexOf(a)] ?? defaultSettingsFor(a.polygon)),
+        settings: own.map((a) => areaSettings[areas.indexOf(a)] ?? defaultSettingsFor(a.shape)),
       });
     });
     if (inputs.length === 0) return null;
@@ -212,7 +212,7 @@ export function useDesign(): DesignState {
       setAreaSettings((m) => {
         const area = areas[areaIndex];
         if (!area) return m;
-        const base = m[areaIndex] ?? defaultSettingsFor(area.polygon);
+        const base = m[areaIndex] ?? defaultSettingsFor(area.shape);
         return { ...m, [areaIndex]: { ...base, ...patch } };
       }),
     resetAreaSettings: () => setAreaSettings({}),

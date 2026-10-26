@@ -11,10 +11,15 @@ import {
   RAISED_UNDERLAY_SPACING_MM,
   UNDERLAY_SPACING_MM,
 } from '../constants.ts';
-import { insetConvex } from '../geometry/polygon.ts';
-import type { Polygon } from '../geometry/polygon.ts';
+import { insetShape } from '../geometry/polygon.ts';
+import type { Shape } from '../geometry/polygon.ts';
 import { tatamiRows } from './tatami.ts';
 import type { StitchBuilder } from './builder.ts';
+import { dist } from './builder.ts';
+import type { Point } from '../types.ts';
+
+/** Ab dieser Lücke zwischen zwei Teilstrecken lohnt ein Sprung. */
+const SPAN_JUMP_MM = 6;
 
 export interface FillOptions {
   /** Reihenabstand der Deckschicht; kleiner = dichter. */
@@ -32,14 +37,18 @@ export interface FillOptions {
  * Stickt die Fläche in den Builder. Das Fadenstück bleibt danach offen,
  * damit der Aufrufer selbst über Schnitt oder Weiterlauf entscheidet.
  */
-export function fillArea(builder: StitchBuilder, poly: Polygon, options: FillOptions = {}): void {
+export function fillArea(builder: StitchBuilder, shape: Shape, options: FillOptions = {}): void {
   const { spacing = FILL_SPACING_MM, angle = 0, raisedLayers = 0 } = options;
 
   // 1. Kantenlauf knapp innerhalb der Kontur — hält den Rand sauber.
-  const edge = insetConvex(poly, FILL_EDGE_INSET_MM);
-  if (edge) builder.runLoop(edge);
+  //    Löcher bekommen ihren eigenen Lauf.
+  const edge = insetShape(shape, FILL_EDGE_INSET_MM);
+  if (edge) {
+    builder.runLoop(edge.outer);
+    for (const hole of edge.holes) builder.runLoop(hole);
+  }
 
-  const inner = edge ?? poly;
+  const inner = edge ?? shape;
 
   // 2. Lockere Querunterlage, quer zur Deckschicht.
   runRows(builder, inner, { spacing: UNDERLAY_SPACING_MM, angle: angle + Math.PI / 2 });
@@ -58,14 +67,16 @@ export function fillArea(builder: StitchBuilder, poly: Polygon, options: FillOpt
 
 function runRows(
   builder: StitchBuilder,
-  poly: Polygon,
+  shape: Shape,
   options: { spacing: number; angle: number },
 ): void {
-  const rows = tatamiRows(poly, options);
-  rows.forEach((row, i) => {
-    if (row.length === 0) return;
-    // Erste Reihe anfahren, danach läuft der Faden durch.
-    if (i === 0) builder.stitchTo(row[0]!);
-    for (const p of row) builder.stitchTo(p);
-  });
+  for (const row of tatamiRows(shape, options)) {
+    const first = row[0];
+    if (!first) continue;
+    const here = builder.current;
+    // Zwischen weit auseinander liegenden Teilstrecken lieber springen
+    // als quer über die Fläche zu sticken.
+    if (here && dist(here, first) > SPAN_JUMP_MM) builder.moveTo(first);
+    for (const p of row) builder.stitchTo(p as Point);
+  }
 }

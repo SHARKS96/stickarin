@@ -6,13 +6,12 @@
  * Schnitt. Verriegelt wird je Fadenstück, darum kümmert sich der Builder.
  */
 import { FILL_SPACING_MM, SATIN_MAX_WIDTH_MM } from './constants.ts';
-import { insetConvex, polygonBounds } from './geometry/polygon.ts';
-import type { Polygon } from './geometry/polygon.ts';
+import { approximateWidth, normalizeShape, shapeBounds } from './geometry/polygon.ts';
+import type { Shape } from './geometry/polygon.ts';
 import { StitchBuilder, dist } from './stitch/builder.ts';
 import { fillArea } from './stitch/fill.ts';
 import { satinLayers } from './stitch/satin.ts';
 import type { Point, StitchPlan, ThreadColor } from './types.ts';
-import { approximateWidth } from '../image/trace.ts';
 import type { TracedArea } from '../image/trace.ts';
 
 export type StitchType = 'fill' | 'satin' | 'outline';
@@ -36,8 +35,8 @@ export interface ColorPlanInput {
 }
 
 /** Automatische Wahl: schmal wird Satin, breit wird Füllstich. */
-export function defaultSettingsFor(poly: Polygon): AreaSettings {
-  const width = approximateWidth(poly);
+export function defaultSettingsFor(shape: Shape): AreaSettings {
+  const width = approximateWidth(shape);
   return {
     stitchType: width <= SATIN_MAX_WIDTH_MM ? 'satin' : 'fill',
     spacing: FILL_SPACING_MM,
@@ -46,8 +45,8 @@ export function defaultSettingsFor(poly: Polygon): AreaSettings {
   };
 }
 
-function centroid(poly: Polygon): Point {
-  const b = polygonBounds(poly);
+function centroid(shape: Shape): Point {
+  const b = shapeBounds(shape);
   return { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
 }
 
@@ -57,11 +56,11 @@ function nearestNeighbourOrder(areas: TracedArea[]): TracedArea[] {
   const rest = [...areas];
   const out: TracedArea[] = [rest.shift() as TracedArea];
   while (rest.length > 0) {
-    const from = centroid((out[out.length - 1] as TracedArea).polygon);
+    const from = centroid((out[out.length - 1] as TracedArea).shape);
     let best = 0;
     let bestD = Infinity;
     rest.forEach((a, i) => {
-      const d = dist(from, centroid(a.polygon));
+      const d = dist(from, centroid(a.shape));
       if (d < bestD) {
         bestD = d;
         best = i;
@@ -73,8 +72,8 @@ function nearestNeighbourOrder(areas: TracedArea[]): TracedArea[] {
 }
 
 /** Mittellinie einer schmalen Fläche, grob über die lange Achse. */
-function spineOf(poly: Polygon): { center: Point[]; width: number } {
-  const b = polygonBounds(poly);
+function spineOf(shape: Shape): { center: Point[]; width: number } {
+  const b = shapeBounds(shape);
   const w = b.maxX - b.minX;
   const h = b.maxY - b.minY;
   if (w >= h) {
@@ -119,28 +118,31 @@ export function buildPlan(colors: ColorPlanInput[], options: BuildPlanOptions = 
     const ordered = nearestNeighbourOrder(color.areas);
     ordered.forEach((area, areaIdx) => {
       const original = color.areas.indexOf(area);
-      const settings = color.settings?.[original] ?? defaultSettingsFor(area.polygon);
+      const settings = color.settings?.[original] ?? defaultSettingsFor(area.shape);
 
       // Weit entfernte Flächen bekommen einen Sprung mit Schnitt davor.
-      const target = centroid(area.polygon);
+      const target = centroid(area.shape);
       const here = builder.current;
       if (areaIdx > 0 && here && dist(here, target) > jumpThresholdMm) builder.moveTo(target);
 
-      stitchArea(builder, area.polygon, settings);
+      stitchArea(builder, area.shape, settings);
     });
   }
 
   return { entries: builder.finish(), threads };
 }
 
-function stitchArea(builder: StitchBuilder, poly: Polygon, settings: AreaSettings): void {
+function stitchArea(builder: StitchBuilder, raw: Shape, settings: AreaSettings): void {
+  const shape = normalizeShape(raw);
+
   if (settings.stitchType === 'outline') {
-    builder.runLoop(poly);
+    builder.runLoop(shape.outer);
+    for (const hole of shape.holes) builder.runLoop(hole);
     return;
   }
 
   if (settings.stitchType === 'satin') {
-    const { center, width } = spineOf(poly);
+    const { center, width } = spineOf(shape);
     const layers = satinLayers(center, width);
     builder.runPath(layers.centerRun);
     builder.runPath(layers.underlay);
@@ -149,9 +151,8 @@ function stitchArea(builder: StitchBuilder, poly: Polygon, settings: AreaSetting
   }
 
   // Füllstich: Kantenlauf, Unterlage, ggf. 3D-Lagen, Deckschicht.
-  const inner = insetConvex(poly, 0) ?? poly;
-  builder.moveTo(inner[0] as Point);
-  fillArea(builder, inner, {
+  builder.moveTo(shape.outer[0] as Point);
+  fillArea(builder, shape, {
     spacing: settings.spacing,
     angle: settings.angle,
     raisedLayers: settings.raisedLayers,

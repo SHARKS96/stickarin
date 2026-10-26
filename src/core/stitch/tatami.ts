@@ -2,6 +2,10 @@
  * Füllstich (Tatami): parallele Reihen hin und her, die Einstiche von Reihe
  * zu Reihe versetzt. Ohne diesen Versatz liegen alle Einstiche übereinander
  * und es entstehen die Streifen aus TEST1.
+ *
+ * Eine Reihe kann die Fläche mehrfach schneiden — bei einem U, einem Ring
+ * oder jeder Form mit Loch. Jede Teilstrecke wird einzeln bestickt; der
+ * Aufrufer entscheidet, ob er dazwischen springt.
  */
 import {
   FILL_SPACING_MM,
@@ -10,8 +14,8 @@ import {
   MIN_STITCH_MM,
   PULL_COMPENSATION_MM,
 } from '../constants.ts';
-import { rotate, scanlineSpan } from '../geometry/polygon.ts';
-import type { Polygon } from '../geometry/polygon.ts';
+import { rotate, rotateShape, scanlineSpans, shapeBounds } from '../geometry/polygon.ts';
+import type { Shape } from '../geometry/polygon.ts';
 import type { Point } from '../types.ts';
 
 export interface TatamiOptions {
@@ -28,10 +32,10 @@ export interface TatamiOptions {
 }
 
 /**
- * Liefert die Reihen als Punktlisten. Die Reihen wechseln die Richtung,
- * sodass der Faden ohne Sprung durchlaufen kann.
+ * Liefert die Teilstrecken als Punktlisten, in Stickreihenfolge.
+ * Die Reihen wechseln die Richtung, damit der Faden kurze Wege hat.
  */
-export function tatamiRows(poly: Polygon, options: TatamiOptions = {}): Point[][] {
+export function tatamiRows(shape: Shape, options: TatamiOptions = {}): Point[][] {
   const {
     spacing = FILL_SPACING_MM,
     angle = 0,
@@ -41,38 +45,39 @@ export function tatamiRows(poly: Polygon, options: TatamiOptions = {}): Point[][
   } = options;
 
   // In ein Koordinatensystem drehen, in dem die Reihen waagerecht liegen.
-  const local = poly.map((p) => rotate(p, -angle));
-  let minY = Infinity;
-  let maxY = -Infinity;
-  for (const p of local) {
-    if (p.y < minY) minY = p.y;
-    if (p.y > maxY) maxY = p.y;
-  }
-  if (!isFinite(minY) || maxY - minY < 1e-9) return [];
+  const local = rotateShape(shape, -angle);
+  const b = shapeBounds(local);
+  if (!isFinite(b.minY) || b.maxY - b.minY < 1e-9) return [];
 
   const rows: Point[][] = [];
   let index = 0;
-  for (let y = minY + spacing / 2; y <= maxY; y += spacing, index++) {
-    const span = scanlineSpan(local, y);
-    if (!span) continue;
-    const [rawLeft, rawRight] = span;
-    // Zugausgleich: die Reihe nach beiden Seiten verbreitern.
-    const left = rawLeft - pullCompensation;
-    const right = rawRight + pullCompensation;
-    if (right - left < MIN_STITCH_MM) continue;
+
+  for (let y = b.minY + spacing / 2; y <= b.maxY; y += spacing, index++) {
+    const spans = scanlineSpans(local, y);
+    if (spans.length === 0) continue;
 
     const offset = (index * stagger * stitchLength) % stitchLength;
-    const xs: number[] = [left];
-    for (let x = left + offset; x < right; x += stitchLength) {
-      if (x - (xs[xs.length - 1] as number) >= MIN_STITCH_MM) xs.push(x);
-    }
-    // Den letzten Einstich nicht direkt neben den vorletzten setzen.
-    if (right - (xs[xs.length - 1] as number) < MIN_STITCH_MM && xs.length > 1) xs.pop();
-    xs.push(right);
-
     const forward = index % 2 === 0;
-    const ordered = forward ? xs : [...xs].reverse();
-    rows.push(ordered.map((x) => rotate({ x, y }, angle)));
+    // Innerhalb einer Reihe die Strecken in Laufrichtung abarbeiten.
+    const ordered = forward ? spans : [...spans].reverse();
+
+    for (const [rawLeft, rawRight] of ordered) {
+      // Zugausgleich: die Strecke nach beiden Seiten verbreitern.
+      const left = rawLeft - pullCompensation;
+      const right = rawRight + pullCompensation;
+      if (right - left < MIN_STITCH_MM) continue;
+
+      const xs: number[] = [left];
+      for (let x = left + offset; x < right; x += stitchLength) {
+        if (x - (xs[xs.length - 1] as number) >= MIN_STITCH_MM) xs.push(x);
+      }
+      // Den letzten Einstich nicht direkt neben den vorletzten setzen.
+      if (right - (xs[xs.length - 1] as number) < MIN_STITCH_MM && xs.length > 1) xs.pop();
+      xs.push(right);
+
+      const run = forward ? xs : [...xs].reverse();
+      rows.push(run.map((x) => rotate({ x, y }, angle)));
+    }
   }
 
   return rows;

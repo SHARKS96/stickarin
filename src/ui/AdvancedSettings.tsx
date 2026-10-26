@@ -25,7 +25,7 @@ export function AdvancedSettings({ design }: { design: DesignState }) {
         </p>
 
         {design.areas.map((area, i) => {
-          const s = design.areaSettings[i] ?? defaultSettingsFor(area.polygon);
+          const s = design.areaSettings[i] ?? defaultSettingsFor(area.shape);
           const color = design.colors.find((c) => c.index === area.colorIndex);
           return (
             <div key={i} className="card" style={{ padding: 16 }}>
