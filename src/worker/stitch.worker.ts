@@ -6,6 +6,7 @@
  * alles noch einmal rechnen muss.
  */
 import { buildPlan, defaultSettingsFor } from '../core/pipeline.ts';
+import { satinMetrics } from '../core/stitch/satin.ts';
 import type { ColorPlanInput } from '../core/pipeline.ts';
 import { exportDesign } from '../core/export.ts';
 import { approximateWidth } from '../core/geometry/polygon.ts';
@@ -84,6 +85,7 @@ function compute(request: Extract<WorkerRequest, { type: 'compute' }>): WorkerRe
     colorIndex: a.colorIndex,
     areaMm2: a.areaMm2,
     widthMm: approximateWidth(a.shape),
+    satinWidthMm: satinMetrics(a.shape).width,
     defaults: defaultSettingsFor(a.shape),
   }));
 

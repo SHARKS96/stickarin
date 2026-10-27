@@ -5,7 +5,7 @@
  * stimmen sollen. Wer hier landet, hat probegestickt und will etwas ändern.
  */
 import { useState } from 'react';
-import { DENSITY_LEVELS } from '../../core/constants.ts';
+import { DENSITY_LEVELS, SATIN_MAX_WIDTH_MM } from '../../core/constants.ts';
 import type { StitchType } from '../../core/pipeline.ts';
 import { Weniger, Hinzufuegen, Fuellstich, Satinstich, Geradstich } from '../Icons.tsx';
 import { ThreadPicker } from '../ThreadPicker.tsx';
@@ -100,7 +100,19 @@ export function AdvancedScreen({ design, onDone }: { design: DesignState; onDone
                     </button>
                   ))}
                 </div>
-                <p className="muted">{STITCH_LABELS.find((s) => s.id === area.stitchType)?.hint}</p>
+                <p className="muted">
+                  {STITCH_LABELS.find((s) => s.id === area.stitchType)?.hint}
+                  {area.stitchType === 'satin' && (
+                    <>
+                      {' '}
+                      Diese Fläche ist quer dazu im Mittel{' '}
+                      <strong>{area.satinWidthMm.toFixed(1).replace('.', ',')} mm</strong> breit
+                      {area.satinWidthMm > SATIN_MAX_WIDTH_MM
+                        ? ' — mehr, als ein Satinstich am Stück tragen kann. Die Stiche werden unterteilt; meist sieht „Füllung“ hier besser aus.'
+                        : '.'}
+                    </>
+                  )}
+                </p>
               </div>
 
               <div className="card">
