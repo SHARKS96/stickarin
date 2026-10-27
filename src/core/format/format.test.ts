@@ -6,7 +6,6 @@ import { describe, expect, it } from 'vitest';
 import { writeExp } from './exp.ts';
 import { writeInf } from './inf.ts';
 import { writeBmp } from './bmp.ts';
-import { centerPlan, planBounds } from '../types.ts';
 import type { PlanEntry, StitchPlan, ThreadColor } from '../types.ts';
 
 const hex = (bytes: Uint8Array) =>
@@ -146,32 +145,20 @@ describe('writeBmp', () => {
   });
 });
 
-describe('centerPlan', () => {
-  it('legt die Mitte des Motivs auf den Nullpunkt', () => {
-    const p = centerPlan(plan([stitch(10, 20), stitch(30, 40)]));
-    const b = planBounds(p);
-    expect((b.minX + b.maxX) / 2).toBeCloseTo(0, 9);
-    expect((b.minY + b.maxY) / 2).toBeCloseTo(0, 9);
-  });
-
-  it('hält den Anfahrtsweg vom Nullpunkt innerhalb des Motivs', () => {
-    // Unzentriert fährt die Maschine von (0,0) quer über den Rahmen und
-    // bläht die Ausdehnung der Datei auf.
-    const far = plan([stitch(100, 100), stitch(110, 110)]);
-    const b = planBounds(centerPlan(far));
-    expect(Math.max(Math.abs(b.minX), Math.abs(b.maxX))).toBeLessThanOrEqual(5.001);
-    expect(Math.max(Math.abs(b.minY), Math.abs(b.maxY))).toBeLessThanOrEqual(5.001);
-  });
-
-  it('verschiebt alle Farben gemeinsam und lässt Befehle in Ruhe', () => {
-    const p = centerPlan(
-      plan(
-        [stitch(0, 0), trim(), colorChange(), stitch(10, 10)],
-        [{ r: 1, g: 2, b: 3, name: 'A', catalog: 'X' }],
-      ),
-    );
-    expect(p.threads).toHaveLength(1);
-    expect(p.entries.map((e) => e.kind)).toEqual(['stitch', 'trim', 'colorChange', 'stitch']);
-    expect(p.entries[0]).toEqual({ kind: 'stitch', x: -5, y: -5 });
+describe('Verschiebung', () => {
+  it('ändert die Bytes nicht, egal wo das Motiv liegt', () => {
+    // Weil der erste Punkt den Ursprung setzt, zählt nur die Geometrie
+    // zueinander — nicht, wo sie im Koordinatensystem steht. Darum braucht
+    // es kein Zentrieren vor dem Schreiben.
+    const shape = (dx: number, dy: number) =>
+      plan([
+        stitch(0 + dx, 0 + dy),
+        stitch(30 + dx, 0 + dy),
+        stitch(30 + dx, 30 + dy),
+        stitch(0 + dx, 0 + dy),
+      ]);
+    const atOrigin = hex(writeExp(shape(0, 0)));
+    expect(hex(writeExp(shape(120, -80)))).toBe(atOrigin);
+    expect(hex(writeExp(shape(-45.5, 200)))).toBe(atOrigin);
   });
 });

@@ -125,8 +125,10 @@ function encodeBmp(rgb: Uint8Array, width: number, height: number): Uint8Array {
   view.setUint16(28, 24, true); // Bit je Pixel
   view.setUint32(30, 0, true); // keine Kompression
   view.setUint32(34, imageSize, true);
-  view.setInt32(38, 2835, true); // ~72 dpi
-  view.setInt32(42, 2835, true);
+  // 3780 Pixel je Meter = 96 dpi. So steht es in TEST1.BMP und TEST2.BMP,
+  // also in den Dateien, die die B 590 gelesen hat.
+  view.setInt32(38, 3780, true);
+  view.setInt32(42, 3780, true);
 
   let p = FILE_HEADER + INFO_HEADER;
   for (let y = height - 1; y >= 0; y--) {
