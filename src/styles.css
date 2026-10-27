@@ -948,10 +948,110 @@ label.field {
 
 .order-list li {
   display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 20px;
+}
+
+/* Die Zeile ist ein Knopf: Dahinter liegt die Wahl der Garnfarbe. */
+.thread-row {
+  display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
   min-height: 48px;
-  font-size: 20px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.thread-row:hover,
+.thread-row[aria-expanded='true'] {
+  background: var(--bg);
+}
+
+.thread-row .text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.thread-row .text .muted {
+  font-size: 16px;
+}
+
+.thread-row .pick {
+  display: flex;
+  color: var(--accent);
+}
+
+/* ---------- Garnfarbe wählen ---------- */
+
+.thread-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 8px 6px;
+}
+
+.threads {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 8px;
+}
+
+.thread {
+  aspect-ratio: 1;
+  min-height: 34px;
+  border: none;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 20%);
+  cursor: pointer;
+}
+
+.thread[aria-pressed='true'] {
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 20%),
+    0 0 0 3px var(--surface),
+    0 0 0 6px var(--accent);
+}
+
+.thread:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.own {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.own input[type='color'] {
+  width: 48px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  cursor: pointer;
+}
+
+/* Die Auswahl steht in einer schmalen Spalte — zwei Reihen lesen sich dort
+   besser als zehn winzige Felder nebeneinander. */
+@media (max-width: 1100px) {
+  .threads {
+    grid-template-columns: repeat(5, 1fr);
+  }
 }
 
 .order-list .num {

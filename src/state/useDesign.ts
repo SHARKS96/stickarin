@@ -15,6 +15,7 @@ import {
 } from '../core/constants.ts';
 import type { HoopId } from '../core/constants.ts';
 import type { AreaSettings, StitchType } from '../core/pipeline.ts';
+import type { ThreadChoice } from '../core/threads.ts';
 import type { ExportedFile } from '../core/export.ts';
 import type { PlanStats, StitchPlan } from '../core/types.ts';
 import { toHex } from '../image/color.ts';
@@ -38,12 +39,18 @@ export interface LoadedImage {
 
 export interface ColorEntry {
   index: number;
+  /** Die im Bild erkannte Farbe — daran erkennt man die Fläche wieder. */
   rgb: Rgb;
   hex: string;
   pixels: number;
   name: string;
   catalog: string;
   ignored: boolean;
+  /** Das Garn, mit dem gestickt wird. Ohne eigene Wahl die erkannte Farbe. */
+  thread: Rgb;
+  threadHex: string;
+  /** Wurde das Garn von Hand gewählt? */
+  threadChosen: boolean;
 }
 
 /**
@@ -58,6 +65,7 @@ export interface ColorSnapshot {
   ignoredSamples: Rgb[];
   colorNames: Record<number, string>;
   ignoredColors: Record<number, boolean>;
+  threads: Record<number, ThreadChoice>;
   order: number[] | null;
 }
 
@@ -85,6 +93,7 @@ export function useDesign() {
   const [ignoredSamples, setIgnoredSamples] = useState<Rgb[]>([]);
   const [colorNames, setColorNames] = useState<Record<number, string>>({});
   const [ignoredColors, setIgnoredColors] = useState<Record<number, boolean>>({});
+  const [threads, setThreads] = useState<Record<number, ThreadChoice>>({});
   const [order, setOrder] = useState<number[] | null>(null);
   const [areaOverrides, setAreaOverrides] = useState<Record<number, AreaSettings>>({});
 
@@ -101,6 +110,7 @@ export function useDesign() {
     knownPalette.current = null;
     setColorNames({});
     setIgnoredColors({});
+    setThreads({});
     setOrder(null);
     setAreaOverrides({});
     setIgnoredSamples([]);
@@ -158,6 +168,7 @@ export function useDesign() {
     // React bricht dann ab, und es folgt keine Rechnung umsonst.
     setColorNames((m) => inheritKeys(m, ancestors));
     setIgnoredColors((m) => inheritKeys(m, ancestors));
+    setThreads((m) => inheritKeys(m, ancestors));
     setOrder((o) => inheritOrder(o, ancestors));
   }, [computed]);
 
@@ -165,20 +176,29 @@ export function useDesign() {
   const colors = useMemo<ColorEntry[]>(() => {
     const palette = worker.result?.palette ?? [];
     const counts = worker.result?.counts ?? [];
-    const base = palette.map((rgb, index) => ({
-      index,
-      rgb,
-      hex: toHex(rgb),
-      pixels: counts[index] ?? 0,
-      name: colorNames[index] ?? defaultColorName(rgb, index),
-      catalog: 'Stick-Karin',
-      ignored: ignoredColors[index] ?? false,
-    }));
+    const base = palette.map((rgb, index) => {
+      const chosen = threads[index];
+      const thread = chosen?.rgb ?? rgb;
+      return {
+        index,
+        rgb,
+        hex: toHex(rgb),
+        pixels: counts[index] ?? 0,
+        // Der Name steht beim Umfädeln im Display der Maschine, gehört also
+        // zum Garn — nicht zu der Farbe, die einmal im Bild war.
+        name: colorNames[index] ?? chosen?.name ?? defaultColorName(rgb, index),
+        catalog: 'Stick-Karin',
+        ignored: ignoredColors[index] ?? false,
+        thread,
+        threadHex: toHex(thread),
+        threadChosen: chosen !== undefined,
+      };
+    });
     if (!order) return base;
     const byIndex = new Map(base.map((c) => [c.index, c]));
     const sorted = order.map((i) => byIndex.get(i)).filter((c): c is ColorEntry => Boolean(c));
     return [...sorted, ...base.filter((c) => !order.includes(c.index))];
-  }, [worker.result, colorNames, ignoredColors, order]);
+  }, [worker.result, colorNames, ignoredColors, threads, order]);
 
   // --- Flächen --------------------------------------------------------
   const areas = useMemo<AreaView[]>(() => {
@@ -222,6 +242,7 @@ export function useDesign() {
         name: c.name,
         catalog: c.catalog,
         ignored: c.ignored,
+        ...(c.threadChosen ? { thread: c.thread } : {}),
       })),
       areaSettings: areaOverrides,
     });
@@ -237,6 +258,7 @@ export function useDesign() {
     areaOverrides,
     colorNames,
     ignoredColors,
+    threads,
     order,
   ]);
 
@@ -289,6 +311,7 @@ export function useDesign() {
           ignoredSamples,
           colorNames,
           ignoredColors,
+          threads,
           order,
           areaSettings: areaOverrides,
         },
@@ -307,6 +330,7 @@ export function useDesign() {
       ignoredSamples,
       colorNames,
       ignoredColors,
+      threads,
       order,
       areaOverrides,
       refreshGallery,
@@ -340,6 +364,8 @@ export function useDesign() {
     setIgnoredSamples(s.ignoredSamples);
     setColorNames(s.colorNames);
     setIgnoredColors(s.ignoredColors);
+    // Ältere Stickbilder kennen noch keine eigenen Garnfarben.
+    setThreads(s.threads ?? {});
     setOrder(s.order);
     setAreaOverrides(s.areaSettings);
     return true;
@@ -386,6 +412,17 @@ export function useDesign() {
     snapshotColors,
     restoreColors,
     colors,
+    /** Ein Garn von Hand wählen; `null` nimmt die erkannte Bildfarbe zurück. */
+    setThreadColor: (index: number, choice: ThreadChoice | null) =>
+      setThreads((m) => {
+        if (choice) return { ...m, [index]: choice };
+        if (m[index] === undefined) return m;
+        const next = { ...m };
+        delete next[index];
+        return next;
+      }),
+    threadsChosen: Object.keys(threads).length,
+    resetThreadColors: () => setThreads({}),
     setColorName: (index: number, name: string) => setColorNames((m) => ({ ...m, [index]: name })),
     toggleColorIgnored: (index: number) => setIgnoredColors((m) => ({ ...m, [index]: !m[index] })),
     moveColor: (index: number, direction: -1 | 1) =>
@@ -427,6 +464,7 @@ export function useDesign() {
       ignoredSamples,
       colorNames,
       ignoredColors,
+      threads,
       order,
     };
   }
@@ -442,6 +480,7 @@ export function useDesign() {
     setIgnoredSamples(snapshot.ignoredSamples);
     setColorNames(snapshot.colorNames);
     setIgnoredColors(snapshot.ignoredColors);
+    setThreads(snapshot.threads);
     setOrder(snapshot.order);
   }
 

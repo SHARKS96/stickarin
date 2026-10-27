@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { DENSITY_LEVELS } from '../../core/constants.ts';
 import type { StitchType } from '../../core/pipeline.ts';
 import { Weniger, Hinzufuegen, Fuellstich, Satinstich, Geradstich } from '../Icons.tsx';
+import { ThreadPicker } from '../ThreadPicker.tsx';
 import { StitchPreview } from '../StitchPreview.tsx';
 import type { DesignState } from '../../state/useDesign.ts';
 
@@ -32,6 +33,7 @@ export function AdvancedScreen({ design, onDone }: { design: DesignState; onDone
   const area = design.areas[selected];
 
   const colorOf = (colorIndex: number) => design.colors.find((c) => c.index === colorIndex);
+  const color = area ? colorOf(area.colorIndex) : undefined;
 
   return (
     <div className="page">
@@ -70,7 +72,7 @@ export function AdvancedScreen({ design, onDone }: { design: DesignState; onDone
                 >
                   <span
                     className="swatch small"
-                    style={{ background: c?.hex ?? '#888', width: 22, height: 22 }}
+                    style={{ background: c?.threadHex ?? '#888', width: 22, height: 22 }}
                   />
                   {i + 1}. Fläche · {Math.round(a.areaMm2)} mm²
                 </button>
@@ -135,6 +137,23 @@ export function AdvancedScreen({ design, onDone }: { design: DesignState; onDone
                 </p>
               </div>
 
+              {color && (
+                <div className="card">
+                  <h2>Garnfarbe</h2>
+                  <ThreadPicker
+                    color={color}
+                    onPick={(choice) => design.setThreadColor(color.index, choice)}
+                  />
+                  <p className="muted">
+                    {color.threadChosen
+                      ? `Wird in „${color.name}“ gestickt statt in der Farbe aus dem Bild.`
+                      : 'Gestickt wird in der Farbe, die im Bild erkannt wurde.'}{' '}
+                    Die Farbe gilt für alle Flächen dieses Garns — die Maschine fädelt pro Garn nur
+                    einmal um.
+                  </p>
+                </div>
+              )}
+
               <div className="card" style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                 <span style={{ flex: 1 }}>
                   <strong style={{ display: 'block', fontSize: 21 }}>Erhaben (3D-Effekt)</strong>
@@ -185,5 +204,6 @@ export function AdvancedScreen({ design, onDone }: { design: DesignState; onDone
 export const ADVANCED_HELP = [
   'Tippen Sie unten auf einen Teil des Motivs.',
   'Stellen Sie rechts Stichart, Dichte oder den 3D-Effekt nur für diesen Teil ein.',
+  'Unter „Garnfarbe“ wählen Sie, mit welchem Garn gestickt wird — unabhängig davon, welche Farbe im Bild stand.',
   'Unsicher? „Zurücksetzen“ stellt die empfohlenen Werte wieder her.',
 ];

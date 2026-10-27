@@ -51,6 +51,13 @@ describe('inheritKeys', () => {
     expect(inheritKeys({ 2: true }, [0, 1])).toEqual({});
   });
 
+  it('nimmt auch eine von Hand gewählte Garnfarbe mit', () => {
+    // Sonst verlöre ein Negativ-Motiv sein schwarzes Garn, sobald jemand
+    // noch einmal mit der Pipette ins Bild tippt.
+    const schwarz = { name: 'Schwarz', rgb: { r: 28, g: 28, b: 30 } };
+    expect(inheritKeys({ 1: schwarz }, [3, 1, 0])).toEqual({ 1: schwarz });
+  });
+
   it('gibt dasselbe Objekt zurück, wenn sich nichts ändert', () => {
     // Nur so bricht React ab und rechnet nicht noch eine Runde umsonst.
     const names = { 0: 'Dach', 1: 'Wand' };

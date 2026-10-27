@@ -157,7 +157,8 @@ function colorInputs(
     const own = areas.filter((a) => a.colorIndex === color.index);
     if (own.length === 0) continue;
 
-    const rgb = palette[color.index] ?? { r: 0, g: 0, b: 0 };
+    // Von Hand gewähltes Garn schlägt die erkannte Bildfarbe.
+    const rgb = color.thread ?? palette[color.index] ?? { r: 0, g: 0, b: 0 };
     const thread: ThreadColor = {
       r: rgb.r,
       g: rgb.g,

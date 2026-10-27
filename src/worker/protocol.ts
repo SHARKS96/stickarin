@@ -22,8 +22,19 @@ export interface ComputeOptions {
   tolerance: number;
   ignoredSamples: Rgb[];
   widthMm: number;
-  /** Farben in Stickreihenfolge; `ignored` lässt eine Farbe weg. */
-  colors: { index: number; name: string; catalog: string; ignored: boolean }[];
+  /**
+   * Farben in Stickreihenfolge; `ignored` lässt eine Farbe weg.
+   *
+   * `thread` ist das von Hand gewählte Garn. Fehlt es, wird in der aus dem
+   * Bild erkannten Farbe gestickt.
+   */
+  colors: {
+    index: number;
+    name: string;
+    catalog: string;
+    ignored: boolean;
+    thread?: Rgb;
+  }[];
   /** Abweichende Einstellungen je Fläche, über den Flächenindex. */
   areaSettings: Record<number, AreaSettings>;
 }

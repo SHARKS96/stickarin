@@ -41,7 +41,8 @@ Start ─► 1 Bild ─► 2 Größe ─► 3 Farben ─► 4 Vorschau ─► 5 
                                   ▼             ▼
                           Farbe anpassen   Erweiterte
                           (Pipette,        Einstellungen
-                           Toleranz)       (Stichart, Dichte, 3D)
+                           Toleranz)       (Stichart, Dichte,
+                                            3D, Garnfarbe)
 ```
 
 Gespeicherte Stickbilder liegen in IndexedDB und lassen sich von der
@@ -86,6 +87,8 @@ der Stichplan geht als typisierte Felder über die Grenze und wird
   die BMP-Vorschau trifft deren Maße und Dateigrößen exakt.
 - Konturen mit Löchern und konkaven Formen, nicht mehr nur konvexe Hüllen.
 - Farbreduktion mit Pipette, Toleranz und automatisch erkanntem Hintergrund.
+- Garnfarbe je Garn frei wählbar — nötig beim Negativ-Motiv, wo nach dem
+  Weglassen des schwarzen Hintergrunds weiß auf weißem Stoff gestickt würde.
 - Fünf Schritte als PWA mit App-Icon, Galerie und Download der drei Dateien.
 
 **Noch vereinfacht:**

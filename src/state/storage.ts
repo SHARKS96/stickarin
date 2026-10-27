@@ -11,6 +11,7 @@
  */
 import type { HoopId } from '../core/constants.ts';
 import type { AreaSettings } from '../core/pipeline.ts';
+import type { ThreadChoice } from '../core/threads.ts';
 
 const DB_NAME = 'stickarin';
 const DB_VERSION = 1;
@@ -34,6 +35,8 @@ export interface SavedDesign {
     ignoredSamples: { r: number; g: number; b: number }[];
     colorNames: Record<number, string>;
     ignoredColors: Record<number, boolean>;
+    /** Von Hand gewählte Garne; fehlt bei Stickbildern aus früheren Fassungen. */
+    threads?: Record<number, ThreadChoice>;
     order: number[] | null;
     areaSettings: Record<number, AreaSettings>;
   };
