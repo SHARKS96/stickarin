@@ -18,6 +18,16 @@ export const MAX_STITCH_MM = 3.0;
 /** Kürzester sinnvoller Stich; alles darunter wird verschluckt. */
 export const MIN_STITCH_MM = 0.5;
 
+/**
+ * Bis zu dieser Weglänge wird durchgestickt statt gesprungen.
+ *
+ * Darüber lohnt der Sprung mit Schnitt, darunter kostet er mehr, als er
+ * spart: Jeder Schnitt bedeutet Verriegeln und einen Fadenrest. Ein
+ * Zentimeter ist die übliche Faustregel; innerhalb einer Fläche liegt der
+ * Weg ohnehin unter der Deckschicht und ist nicht zu sehen.
+ */
+export const TRAVEL_MAX_MM = 10;
+
 /** Reihenabstand des Füllstichs (kleiner = dichter). */
 export const FILL_SPACING_MM = 0.4;
 

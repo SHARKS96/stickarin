@@ -8,18 +8,15 @@
 import {
   FILL_EDGE_INSET_MM,
   FILL_SPACING_MM,
+  PULL_COMPENSATION_MM,
   RAISED_UNDERLAY_SPACING_MM,
   UNDERLAY_SPACING_MM,
 } from '../constants.ts';
-import { insetShape } from '../geometry/polygon.ts';
+import { insetShape, normalizeShape, offsetRingInward, pointInShape } from '../geometry/polygon.ts';
 import type { Shape } from '../geometry/polygon.ts';
 import { tatamiRows } from './tatami.ts';
 import type { StitchBuilder } from './builder.ts';
-import { dist } from './builder.ts';
 import type { Point } from '../types.ts';
-
-/** Ab dieser Lücke zwischen zwei Teilstrecken lohnt ein Sprung. */
-const SPAN_JUMP_MM = 6;
 
 export interface FillOptions {
   /** Reihenabstand der Deckschicht; kleiner = dichter. */
@@ -37,11 +34,13 @@ export interface FillOptions {
  * Stickt die Fläche in den Builder. Das Fadenstück bleibt danach offen,
  * damit der Aufrufer selbst über Schnitt oder Weiterlauf entscheidet.
  */
-export function fillArea(builder: StitchBuilder, shape: Shape, options: FillOptions = {}): void {
+export function fillArea(builder: StitchBuilder, raw: Shape, options: FillOptions = {}): void {
   const { spacing = FILL_SPACING_MM, angle = 0, raisedLayers = 0 } = options;
+  // Außen im Uhrzeigersinn, Löcher dagegen — darauf verlässt sich der Versatz.
+  const shape = normalizeShape(raw);
 
-  // 1. Kantenlauf knapp innerhalb der Kontur — hält den Rand sauber.
-  //    Löcher bekommen ihren eigenen Lauf.
+  // 1. Kantenlauf knapp innerhalb der Kontur. Er gehört zur Unterlage und
+  //    hält den Stoff fest; zu sehen ist er später nicht.
   const edge = insetShape(shape, FILL_EDGE_INSET_MM);
   if (edge) {
     builder.runLoop(edge.outer);
@@ -61,8 +60,40 @@ export function fillArea(builder: StitchBuilder, shape: Shape, options: FillOpti
     });
   }
 
-  // 4. Deckschicht.
-  runRows(builder, inner, { spacing, angle });
+  // 4. Deckschicht auf der **vollen** Fläche, nicht auf der versetzten.
+  //    Sonst endet die Füllung einen halben Millimeter vor der Kante.
+  runRows(builder, shape, { spacing, angle });
+
+  // 5. Abschlusskontur ganz außen.
+  //
+  //    Ohne sie bilden die Umkehrpunkte der Füllreihen den sichtbaren Rand:
+  //    Jede Reihe endet für sich, nichts hält die Enden auf einer Linie, und
+  //    der Rand wird weich und ausgefranst. Genau das zeigt TEST2.
+  //
+  //    Sie läuft auf der **Außenkante der Füllung**, also um den
+  //    Zugausgleich weiter draußen als die Sollkante. Liefe sie auf der
+  //    Sollkante, blieben die um 0,2 mm verlängerten Reihenenden davor
+  //    stehen und der Kamm wäre weiter zu sehen. Der Kantenlauf aus
+  //    Schritt 1 hilft ohnehin nicht — er liegt einen halben Millimeter
+  //    weiter innen und unter der Deckschicht.
+  const rim = outsetBy(shape, PULL_COMPENSATION_MM);
+  builder.runLoop(rim.outer);
+  for (const hole of rim.holes) builder.runLoop(hole);
+}
+
+/**
+ * Die Fläche um `d` vergrößern: außen weiter hinaus, in ein Loch hinein.
+ *
+ * Das ist genau die Fläche, die die Füllreihen mit Zugausgleich bedecken —
+ * jede Reihe läuft `d` über die Sollkante hinaus, an der Außenkante wie am
+ * Lochrand. `offsetRingInward` rechnet dabei in Material: Ein negativer
+ * Wert bedeutet mehr Material, bei beiden Ringarten.
+ */
+function outsetBy(shape: Shape, d: number): Shape {
+  return {
+    outer: offsetRingInward(shape.outer, -d),
+    holes: shape.holes.map((h) => offsetRingInward(h, -d)),
+  };
 }
 
 function runRows(
@@ -70,13 +101,39 @@ function runRows(
   shape: Shape,
   options: { spacing: number; angle: number },
 ): void {
+  // Geprüft wird gegen die Fläche, die die Reihen tatsächlich bedecken —
+  // also einschließlich Zugausgleich. Die Verbindung zwischen zwei Reihen
+  // läuft genau auf dieser Außenkante; gegen die Sollkante geprüft würde
+  // jeder Reihenwechsel als Austritt gelten.
+  const covered = outsetBy(shape, PULL_COMPENSATION_MM + TRAVEL_TOLERANCE_MM);
+
   for (const row of tatamiRows(shape, options)) {
     const first = row[0];
     if (!first) continue;
     const here = builder.current;
-    // Zwischen weit auseinander liegenden Teilstrecken lieber springen
-    // als quer über die Fläche zu sticken.
-    if (here && dist(here, first) > SPAN_JUMP_MM) builder.moveTo(first);
+
+    // Der Weg zur nächsten Teilstrecke darf nur durchgestickt werden, wenn
+    // er im Material bleibt. Sonst liefe der Faden quer durch ein Loch oder
+    // über die Einbuchtung einer U-Form — sichtbar und falsch.
+    if (here && !staysInside(covered, here, first)) builder.moveTo(first);
+    else builder.travelTo(first);
+
     for (const p of row) builder.stitchTo(p as Point);
   }
+}
+
+/** Wie viele Zwischenpunkte geprüft werden; mehr kostet nur Rechenzeit. */
+const TRAVEL_SAMPLES = 8;
+
+/** Spielraum, damit ein Punkt genau auf der Kante nicht als außen gilt. */
+const TRAVEL_TOLERANCE_MM = 0.1;
+
+/** Liegt die ganze Strecke von `a` nach `b` innerhalb der Fläche? */
+function staysInside(shape: Shape, a: Point, b: Point): boolean {
+  for (let i = 1; i < TRAVEL_SAMPLES; i++) {
+    const t = i / TRAVEL_SAMPLES;
+    const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    if (!pointInShape(shape, p)) return false;
+  }
+  return true;
 }
