@@ -2,8 +2,11 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// Auf GitHub Pages liegt die App unter /stick-karin/, lokal unter /.
-const base = process.env.STICK_BASE ?? (process.env.GITHUB_ACTIONS ? '/stick-karin/' : '/');
+// Standardmäßig liegt die App im Wurzelverzeichnis. Auf GitHub Pages liegt
+// sie unter dem Repository-Namen; diesen Pfad setzt der Workflow über
+// STICK_BASE, damit hier kein Name fest verdrahtet ist, der bei einer
+// Umbenennung still falsch wird.
+const base = process.env.STICK_BASE ?? '/';
 
 export default defineConfig({
   base,

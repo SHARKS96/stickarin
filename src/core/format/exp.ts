@@ -47,6 +47,7 @@ export function writeExp(plan: StitchPlan, options: ExpOptions = {}): Uint8Array
   // nicht über tausende Stiche aufaddieren.
   let curX = 0;
   let curY = 0;
+  let started = false;
   let inJumpChain = false;
 
   const closeJumpChain = () => {
@@ -71,6 +72,19 @@ export function writeExp(plan: StitchPlan, options: ExpOptions = {}): Uint8Array
 
     const targetX = Math.round(toUnits(entry.x));
     const targetY = Math.round(toUnits(entry.y));
+
+    // Der erste Punkt **ist** der Ursprung: Dort steht die Nadel, wenn die
+    // Maschine anfängt. Würde der Writer stattdessen vom Nullpunkt dorthin
+    // fahren, gehörte dieser Anfahrtsweg zur Ausdehnung der Datei — ein
+    // 40-mm-Motiv käme als 47 mm breit heraus. So macht es auch
+    // `reference/stickcore.mjs`, mit der TEST2 erzeugt wurde.
+    if (!started) {
+      started = true;
+      curX = targetX;
+      curY = targetY;
+      out.push(0x00, 0x00);
+      continue;
+    }
     const totalX = targetX - curX;
     const totalY = targetY - curY;
     if (totalX === 0 && totalY === 0 && !isJump) {

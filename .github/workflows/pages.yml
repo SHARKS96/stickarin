@@ -40,7 +40,7 @@ jobs:
         run: npm test
 
       - name: Build
-        # Auf Pages liegt die App unter /stick-karin/.
+        # Auf Pages liegt die App unter dem Repository-Namen.
         run: npm run build
         env:
           STICK_BASE: /${{ github.event.repository.name }}/

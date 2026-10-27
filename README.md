@@ -27,8 +27,9 @@ npm run dev        # http://localhost:5173
 | `npm run format` | Prettier schreiben |
 | `npm run icons` | `src/ui/Icons.tsx` aus `assets/icons/` neu erzeugen |
 
-Als App aufs iPad: Safari › Teilen › „Zum Home-Bildschirm“. Danach startet
-Stickarin im Vollbild ohne Adressleiste.
+Als App aufs iPad: <https://sharks96.github.io/stickarin/> in Safari öffnen,
+dann Teilen › „Zum Home-Bildschirm“. Danach startet Stickarin im Vollbild
+ohne Adressleiste.
 
 ## Der Weg durch die App
 
@@ -113,13 +114,23 @@ Einzelheiten zum Byte-Aufbau: [`docs/format.md`](docs/format.md).
 ## Veröffentlichen
 
 `.github/workflows/pages.yml` baut und veröffentlicht jeden Push auf `main`
-nach GitHub Pages. Der Basispfad kommt aus dem Repository-Namen; lokal
-nachstellen lässt sich das mit `STICK_BASE=/stick-karin/ npm run build`.
+nach <https://sharks96.github.io/stickarin/>.
+
+Der Basispfad kommt aus dem Repository-Namen, steht also nirgends fest
+verdrahtet; lokal nachstellen lässt sich das mit
+`STICK_BASE=/stickarin/ npm run build`. Ohne `STICK_BASE` baut Vite für das
+Wurzelverzeichnis — so, wie es jeder andere statische Hoster ausliefert.
 
 Damit das greift, muss in den Repository-Einstellungen unter
 *Settings › Pages* als Quelle **GitHub Actions** eingestellt sein.
 
 ## Lizenz
 
-Eigener Code, ohne Ink/Stitch-Übernahmen — deshalb ist die App **nicht** an die
-GPL gebunden.
+[GNU General Public License v3](LICENSE).
+
+Der Code ist durchgehend eigener; aus Ink/Stitch wurde nichts übernommen. Die
+GPL ist hier also eine Entscheidung und keine Auflage — und weil sie gefallen
+ist, stünde einer späteren Übernahme von Ink/Stitch-Algorithmen auch nichts
+mehr im Weg.
+
+`reference/stickcore.mjs` gehört zum Projekt und fällt unter dieselbe Lizenz.
