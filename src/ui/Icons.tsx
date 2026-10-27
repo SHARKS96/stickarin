@@ -160,7 +160,7 @@ export const Nadel = (p: IconProps) => (
 /** Pipette */
 export const Pipette = (p: IconProps) => (
   <Icon {...p}>
-    <path d="M13 6l5 5 M15.5 3.5a2.1 2.1 0 0 1 3 0l2 2a2.1 2.1 0 0 1 0 3L18 11 13 6z M14.5 9.5L6 18H4v-2l8.5-8.5" />
+    <path d="M11.51 7.55L13.98 5.07A3.5 3.5 0 0 1 18.93 10.02L16.45 12.49 M10.44 6.48L17.52 13.56 M12.21 8.25L7.12 13.34L5.21 18.79L10.66 16.88L15.75 11.79" />
   </Icon>
 );
 
