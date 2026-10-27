@@ -15,12 +15,14 @@ import {
 } from '../core/constants.ts';
 import type { HoopId } from '../core/constants.ts';
 import type { AreaSettings, StitchType } from '../core/pipeline.ts';
+import type { ThreadChoice } from '../core/threads.ts';
 import type { ExportedFile } from '../core/export.ts';
 import type { PlanStats, StitchPlan } from '../core/types.ts';
 import { toHex } from '../image/color.ts';
 import type { Rgb } from '../image/color.ts';
 import type { AreaInfo, WorkImage } from '../worker/protocol.ts';
 import { useStitchWorker } from './useStitchWorker.ts';
+import { inheritKeys, inheritOrder, matchPalette, samePalette } from './palette.ts';
 import { deleteDesign, listDesigns, loadDesign, saveDesign } from './storage.ts';
 import type { SavedDesign, SavedDesignSummary } from './storage.ts';
 
@@ -37,12 +39,34 @@ export interface LoadedImage {
 
 export interface ColorEntry {
   index: number;
+  /** Die im Bild erkannte Farbe — daran erkennt man die Fläche wieder. */
   rgb: Rgb;
   hex: string;
   pixels: number;
   name: string;
   catalog: string;
   ignored: boolean;
+  /** Das Garn, mit dem gestickt wird. Ohne eigene Wahl die erkannte Farbe. */
+  thread: Rgb;
+  threadHex: string;
+  /** Wurde das Garn von Hand gewählt? */
+  threadChosen: boolean;
+}
+
+/**
+ * Alle Farbentscheidungen auf einen Schlag — für „Abbrechen“.
+ *
+ * Die Palette gehört dazu: Die übrigen Felder sind über Palettenindizes
+ * adressiert und ohne sie nicht zu deuten.
+ */
+export interface ColorSnapshot {
+  palette: Rgb[];
+  tolerance: number;
+  ignoredSamples: Rgb[];
+  colorNames: Record<number, string>;
+  ignoredColors: Record<number, boolean>;
+  threads: Record<number, ThreadChoice>;
+  order: number[] | null;
 }
 
 /** Einstellungen einer Fläche, wie sie der Schirm „Erweitert“ zeigt. */
@@ -69,6 +93,7 @@ export function useDesign() {
   const [ignoredSamples, setIgnoredSamples] = useState<Rgb[]>([]);
   const [colorNames, setColorNames] = useState<Record<number, string>>({});
   const [ignoredColors, setIgnoredColors] = useState<Record<number, boolean>>({});
+  const [threads, setThreads] = useState<Record<number, ThreadChoice>>({});
   const [order, setOrder] = useState<number[] | null>(null);
   const [areaOverrides, setAreaOverrides] = useState<Record<number, AreaSettings>>({});
 
@@ -78,9 +103,14 @@ export function useDesign() {
   }, []);
   useEffect(refreshGallery, [refreshGallery]);
 
+  // Die Palette, auf die sich die index-adressierten Einstellungen beziehen.
+  const knownPalette = useRef<Rgb[] | null>(null);
+
   const resetDerived = useCallback(() => {
+    knownPalette.current = null;
     setColorNames({});
     setIgnoredColors({});
+    setThreads({});
     setOrder(null);
     setAreaOverrides({});
     setIgnoredSamples([]);
@@ -111,24 +141,64 @@ export function useDesign() {
     setIgnoredColors((m) => ({ ...m, [backgroundIndex]: true }));
   }, [backgroundIndex]);
 
+  // --- Einstellungen an die neue Palette heften ------------------------
+  //
+  // Die Farbreduktion läuft nach jeder Änderung neu, und ihre Palette
+  // kommt dabei in anderer Reihenfolge und anderer Länge zurück. Ohne
+  // diesen Schritt gehörte „Rot wird nicht gestickt“ nach einem Tipp mit
+  // der Pipette plötzlich zu Blau.
+  const computed = worker.result;
+
+  useEffect(() => {
+    if (!computed) return;
+    const before = knownPalette.current;
+    knownPalette.current = computed.palette;
+    if (!before || before.length === 0 || samePalette(before, computed.palette)) return;
+
+    // Der Worker sagt aus den Pixeln heraus, aus welcher alten Farbe jede
+    // neue hervorgegangen ist. Das gilt nur, wenn er von derselben alten
+    // Palette ausging wie wir; war eine Antwort überholt, bleibt der
+    // Abgleich über den Farbabstand. Der trifft die Umnummerierung — nur
+    // einen Zerfall in zwei Farben kann er nicht auflösen.
+    const ancestors = samePalette(computed.ancestorsOf, before)
+      ? computed.ancestors
+      : matchPalette(before, computed.palette);
+
+    // Die Setter geben dasselbe Objekt zurück, wenn sich nichts ändert.
+    // React bricht dann ab, und es folgt keine Rechnung umsonst.
+    setColorNames((m) => inheritKeys(m, ancestors));
+    setIgnoredColors((m) => inheritKeys(m, ancestors));
+    setThreads((m) => inheritKeys(m, ancestors));
+    setOrder((o) => inheritOrder(o, ancestors));
+  }, [computed]);
+
   // --- Farbliste ------------------------------------------------------
   const colors = useMemo<ColorEntry[]>(() => {
     const palette = worker.result?.palette ?? [];
     const counts = worker.result?.counts ?? [];
-    const base = palette.map((rgb, index) => ({
-      index,
-      rgb,
-      hex: toHex(rgb),
-      pixels: counts[index] ?? 0,
-      name: colorNames[index] ?? defaultColorName(rgb, index),
-      catalog: 'Stick-Karin',
-      ignored: ignoredColors[index] ?? false,
-    }));
+    const base = palette.map((rgb, index) => {
+      const chosen = threads[index];
+      const thread = chosen?.rgb ?? rgb;
+      return {
+        index,
+        rgb,
+        hex: toHex(rgb),
+        pixels: counts[index] ?? 0,
+        // Der Name steht beim Umfädeln im Display der Maschine, gehört also
+        // zum Garn — nicht zu der Farbe, die einmal im Bild war.
+        name: colorNames[index] ?? chosen?.name ?? defaultColorName(rgb, index),
+        catalog: 'Stick-Karin',
+        ignored: ignoredColors[index] ?? false,
+        thread,
+        threadHex: toHex(thread),
+        threadChosen: chosen !== undefined,
+      };
+    });
     if (!order) return base;
     const byIndex = new Map(base.map((c) => [c.index, c]));
     const sorted = order.map((i) => byIndex.get(i)).filter((c): c is ColorEntry => Boolean(c));
     return [...sorted, ...base.filter((c) => !order.includes(c.index))];
-  }, [worker.result, colorNames, ignoredColors, order]);
+  }, [worker.result, colorNames, ignoredColors, threads, order]);
 
   // --- Flächen --------------------------------------------------------
   const areas = useMemo<AreaView[]>(() => {
@@ -172,6 +242,7 @@ export function useDesign() {
         name: c.name,
         catalog: c.catalog,
         ignored: c.ignored,
+        ...(c.threadChosen ? { thread: c.thread } : {}),
       })),
       areaSettings: areaOverrides,
     });
@@ -187,6 +258,7 @@ export function useDesign() {
     areaOverrides,
     colorNames,
     ignoredColors,
+    threads,
     order,
   ]);
 
@@ -239,6 +311,7 @@ export function useDesign() {
           ignoredSamples,
           colorNames,
           ignoredColors,
+          threads,
           order,
           areaSettings: areaOverrides,
         },
@@ -257,6 +330,7 @@ export function useDesign() {
       ignoredSamples,
       colorNames,
       ignoredColors,
+      threads,
       order,
       areaOverrides,
       refreshGallery,
@@ -277,6 +351,10 @@ export function useDesign() {
     });
     setDesignId(saved.id);
     setDesignName(saved.name);
+    // Die gespeicherten Einstellungen hängen an der Palette von damals.
+    // Dieselben Eingaben ergeben sie wieder; bis dahin darf nichts
+    // umgeschrieben werden.
+    knownPalette.current = null;
     const s = saved.settings;
     setWidthMmRaw(s.widthMm);
     setHoopId(s.hoopId);
@@ -286,6 +364,8 @@ export function useDesign() {
     setIgnoredSamples(s.ignoredSamples);
     setColorNames(s.colorNames);
     setIgnoredColors(s.ignoredColors);
+    // Ältere Stickbilder kennen noch keine eigenen Garnfarben.
+    setThreads(s.threads ?? {});
     setOrder(s.order);
     setAreaOverrides(s.areaSettings);
     return true;
@@ -327,8 +407,22 @@ export function useDesign() {
     setTolerance: (n: number) => setTolerance(clamp(n, 0, 100)),
     ignoredSamples,
     addIgnoredSample: (rgb: Rgb) => setIgnoredSamples((s) => [...s, rgb]),
+    undoIgnoredSample: () => setIgnoredSamples((s) => s.slice(0, -1)),
     clearIgnoredSamples: () => setIgnoredSamples([]),
+    snapshotColors,
+    restoreColors,
     colors,
+    /** Ein Garn von Hand wählen; `null` nimmt die erkannte Bildfarbe zurück. */
+    setThreadColor: (index: number, choice: ThreadChoice | null) =>
+      setThreads((m) => {
+        if (choice) return { ...m, [index]: choice };
+        if (m[index] === undefined) return m;
+        const next = { ...m };
+        delete next[index];
+        return next;
+      }),
+    threadsChosen: Object.keys(threads).length,
+    resetThreadColors: () => setThreads({}),
     setColorName: (index: number, name: string) => setColorNames((m) => ({ ...m, [index]: name })),
     toggleColorIgnored: (index: number) => setIgnoredColors((m) => ({ ...m, [index]: !m[index] })),
     moveColor: (index: number, direction: -1 | 1) =>
@@ -361,6 +455,34 @@ export function useDesign() {
     open,
     forget,
   };
+
+  /** Den jetzigen Stand aller Farbentscheidungen festhalten. */
+  function snapshotColors(): ColorSnapshot {
+    return {
+      palette: knownPalette.current ?? [],
+      tolerance,
+      ignoredSamples,
+      colorNames,
+      ignoredColors,
+      threads,
+      order,
+    };
+  }
+
+  /** Genau diesen Stand wiederherstellen — „Abbrechen“. */
+  function restoreColors(snapshot: ColorSnapshot): void {
+    // Zuerst die Palette: Die übrigen Felder sind über ihre Indizes
+    // adressiert. Ohne diese Zeile hielte die Umschreibung oben die
+    // wiederhergestellten Einstellungen für solche der verworfenen
+    // Palette und zöge sie ein zweites Mal um.
+    knownPalette.current = snapshot.palette;
+    setTolerance(snapshot.tolerance);
+    setIgnoredSamples(snapshot.ignoredSamples);
+    setColorNames(snapshot.colorNames);
+    setIgnoredColors(snapshot.ignoredColors);
+    setThreads(snapshot.threads);
+    setOrder(snapshot.order);
+  }
 
   function setAreaSetting(
     index: number,

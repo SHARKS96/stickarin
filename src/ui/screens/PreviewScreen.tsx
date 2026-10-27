@@ -1,6 +1,7 @@
 /** Schritt 4: Vorschau, Kennzahlen und die Reihenfolge der Garne. */
 import { useState } from 'react';
-import { Weiter, Einstellungen } from '../Icons.tsx';
+import { Weiter, Einstellungen, Garn } from '../Icons.tsx';
+import { ThreadPicker } from '../ThreadPicker.tsx';
 import { StitchPreview } from '../StitchPreview.tsx';
 import { cm, cmNumber } from './SizeScreen.tsx';
 import type { DesignState } from '../../state/useDesign.ts';
@@ -18,6 +19,8 @@ function minutes(stitches: number, colorChanges: number): number {
 
 export function PreviewScreen({ design, onAdvanced, onNext }: Props) {
   const [view, setView] = useState<'stick' | 'orig'>('stick');
+  // Welche Garnfarbe gerade zur Auswahl aufgeklappt ist; `null` = keine.
+  const [picking, setPicking] = useState<number | null>(null);
   const stitched = design.colors.filter((c) => !c.ignored);
 
   return (
@@ -51,7 +54,15 @@ export function PreviewScreen({ design, onAdvanced, onNext }: Props) {
           <div className="canvas" style={{ width: '100%' }}>
             {view === 'stick' ? (
               design.plan ? (
-                <StitchPreview plan={design.plan} />
+                <>
+                  {/* Der alte Plan bleibt blass stehen, solange gerechnet
+                      wird. Ein Garnwechsel wirkte sonst eine Sekunde lang
+                      folgenlos. */}
+                  <div className={design.busy ? 'stale' : undefined}>
+                    <StitchPreview plan={design.plan} />
+                  </div>
+                  {design.busy && <span className="busy overlay">Wird berechnet …</span>}
+                </>
               ) : (
                 <p className="muted">
                   {design.busy ? 'Wird berechnet …' : 'Es gibt noch nichts zu sticken.'}
@@ -105,16 +116,41 @@ export function PreviewScreen({ design, onAdvanced, onNext }: Props) {
             <h2>Reihenfolge der Garne</h2>
             <ol className="order-list">
               {stitched.map((c, i) => (
-                <li key={c.index}>
-                  <span className="num">{i + 1}</span>
-                  <span className="swatch small" style={{ background: c.hex }} />
-                  <span>
-                    <strong>{c.name}</strong>
-                  </span>
+                <li key={c.index} className={picking === c.index ? 'open' : undefined}>
+                  <button
+                    type="button"
+                    className="thread-row"
+                    aria-expanded={picking === c.index}
+                    onClick={() => setPicking((p) => (p === c.index ? null : c.index))}
+                  >
+                    <span className="num">{i + 1}</span>
+                    <span className="swatch small" style={{ background: c.threadHex }} />
+                    <span className="text">
+                      <strong>{c.name}</strong>
+                      {c.threadChosen && <span className="muted">statt der Bildfarbe</span>}
+                    </span>
+                    <span className="pick">
+                      <Garn size={24} />
+                    </span>
+                  </button>
+                  {picking === c.index && (
+                    <ThreadPicker
+                      color={c}
+                      onPick={(choice) => design.setThreadColor(c.index, choice)}
+                    />
+                  )}
                 </li>
               ))}
             </ol>
-            <p className="muted">Die Maschine hält vor jeder neuen Farbe an.</p>
+            <p className="muted">
+              Die Maschine hält vor jeder neuen Farbe an. Tippen Sie auf ein Garn, um eine andere
+              Farbe zu sticken — das Motiv selbst ändert sich dadurch nicht.
+            </p>
+            {design.threadsChosen > 0 && (
+              <button type="button" className="btn soft block" onClick={design.resetThreadColors}>
+                Wieder die Farben aus dem Bild
+              </button>
+            )}
           </div>
 
           <button
@@ -152,5 +188,6 @@ export function PreviewScreen({ design, onAdvanced, onNext }: Props) {
 export const PREVIEW_HELP = [
   'So sieht das Stickbild ungefähr aus. Mit „Original“ vergleichen Sie es mit Ihrem Bild.',
   'Rechts steht, wie lange die Maschine stickt und in welcher Reihenfolge Sie die Garne einfädeln.',
+  'Soll eine Fläche in einer anderen Farbe gestickt werden als im Bild — etwa Schwarz statt Weiß —, tippen Sie in der Liste auf das Garn.',
   'Gefällt Ihnen etwas nicht, gehen Sie mit „Zurück“ einfach einen Schritt zurück. Es geht nichts verloren.',
 ];

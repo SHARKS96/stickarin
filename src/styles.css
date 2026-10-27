@@ -281,6 +281,72 @@ a:hover {
   width: 100%;
 }
 
+/* Werkzeug-Schalter: an oder aus, nicht „jetzt hier drücken“.
+   Ein zweiter voller Akzentknopf neben „Fertig“ sähe aus wie eine zweite
+   Hauptaktion; der Zustand stünde dann nur noch in der Farbe. Hier trägt
+   ihn zusätzlich ein Wort. */
+.btn.tool {
+  min-height: 64px;
+  padding: 0 14px 0 22px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 2px transparent;
+}
+
+.btn.tool .label {
+  margin-right: auto;
+}
+
+.btn.tool .state {
+  min-width: 62px;
+  padding: 6px 16px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 19px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.btn.tool[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.btn.tool[aria-pressed='true'] .state {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Die Pipette ist scharf: Der Rahmen gehört ans Bild, nicht an den Kasten
+   drumherum — sonst steht er bei einem kleinen Bild weit daneben. */
+.canvas.plain img.armed {
+  outline: 3px dashed var(--accent);
+  outline-offset: 5px;
+}
+
+/* Die getippten Farben, damit man sieht, was man weggenommen hat. */
+.picked {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.picked .dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Ein heller Tipp — und das ist meistens der Hintergrund — wäre auf der
+   weißen Karte sonst nicht zu sehen. */
+.swatch.dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 20%);
+}
+
 /* Runder Plus/Minus-Knopf */
 .round {
   width: 72px;
@@ -723,6 +789,7 @@ label.field {
 /* ---------- Rahmen und Vorschau ---------- */
 
 .stage .canvas {
+  position: relative;
   flex: 1;
   min-height: 260px;
   display: flex;
@@ -881,10 +948,110 @@ label.field {
 
 .order-list li {
   display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 20px;
+}
+
+/* Die Zeile ist ein Knopf: Dahinter liegt die Wahl der Garnfarbe. */
+.thread-row {
+  display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
   min-height: 48px;
-  font-size: 20px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.thread-row:hover,
+.thread-row[aria-expanded='true'] {
+  background: var(--bg);
+}
+
+.thread-row .text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.thread-row .text .muted {
+  font-size: 16px;
+}
+
+.thread-row .pick {
+  display: flex;
+  color: var(--accent);
+}
+
+/* ---------- Garnfarbe wählen ---------- */
+
+.thread-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 8px 6px;
+}
+
+.threads {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 8px;
+}
+
+.thread {
+  aspect-ratio: 1;
+  min-height: 34px;
+  border: none;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 20%);
+  cursor: pointer;
+}
+
+.thread[aria-pressed='true'] {
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 20%),
+    0 0 0 3px var(--surface),
+    0 0 0 6px var(--accent);
+}
+
+.thread:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.own {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.own input[type='color'] {
+  width: 48px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  cursor: pointer;
+}
+
+/* Die Auswahl steht in einer schmalen Spalte — zwei Reihen lesen sich dort
+   besser als zehn winzige Felder nebeneinander. */
+@media (max-width: 1100px) {
+  .threads {
+    grid-template-columns: repeat(5, 1fr);
+  }
 }
 
 .order-list .num {
@@ -1074,6 +1241,31 @@ dialog.help li::before {
   gap: 10px;
   font-size: 19px;
   color: var(--ink-soft);
+}
+
+/* Während gerechnet wird, bleibt das alte Bild stehen und wird blass.
+   Es verschwinden zu lassen, ließe den halben Schirm zusammenklappen —
+   und ohne jeden Hinweis sähe der Tipp mit der Pipette eine Sekunde lang
+   wirkungslos aus. */
+.stale {
+  opacity: 0.45;
+  transition: opacity 0.15s ease;
+}
+
+.busy.overlay {
+  position: absolute;
+  /* Oben, nicht unten: Der Kasten reicht auf dem iPad bis an die untere
+     Bildschirmkante, und dort wäre der Hinweis nicht zu sehen. */
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  /* Ohne das bricht der Hinweis um: Absolut positioniert steht ihm von
+     `left: 50%` an nur die halbe Breite des Kastens zur Verfügung. */
+  white-space: nowrap;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 15%);
 }
 
 .busy::before {

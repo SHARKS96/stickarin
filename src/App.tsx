@@ -113,10 +113,7 @@ export function App() {
           design={design}
           colorIndex={adjusting}
           onDone={() => setScreen('colors')}
-          onCancel={() => {
-            design.clearIgnoredSamples();
-            setScreen('colors');
-          }}
+          onCancel={() => setScreen('colors')}
         />
       )}
 
