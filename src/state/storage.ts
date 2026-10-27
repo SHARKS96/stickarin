@@ -12,7 +12,7 @@
 import type { HoopId } from '../core/constants.ts';
 import type { AreaSettings } from '../core/pipeline.ts';
 
-const DB_NAME = 'stick-karin';
+const DB_NAME = 'stickarin';
 const DB_VERSION = 1;
 const STORE = 'designs';
 
