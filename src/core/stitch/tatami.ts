@@ -44,24 +44,12 @@ export function tatamiRows(shape: Shape, options: TatamiOptions = {}): Point[][]
     pullCompensation = PULL_COMPENSATION_MM,
   } = options;
 
-  // In ein Koordinatensystem drehen, in dem die Reihen waagerecht liegen.
-  const local = rotateShape(shape, -angle);
-  const b = shapeBounds(local);
-  if (!isFinite(b.minY) || b.maxY - b.minY < 1e-9) return [];
-
-  // Erst alle Teilstrecken einsammeln, dann zu Bahnen ordnen.
-  const spans: Span[] = [];
-  let index = 0;
-
-  for (let y = b.minY + spacing / 2; y <= b.maxY; y += spacing, index++) {
-    // Lage der Einstiche dieser Reihe im Stichraster.
-    const phase = (index * stagger * stitchLength) % stitchLength;
-
-    for (const [rawLeft, rawRight] of scanlineSpans(local, y)) {
-      // Zugausgleich: die Strecke nach beiden Seiten verbreitern.
-      const left = rawLeft - pullCompensation;
-      const right = rawRight + pullCompensation;
-      if (right - left < MIN_STITCH_MM) continue;
+  const rows: Point[][] = [];
+  for (const lane of spanLanes(shape, { spacing, angle, pullCompensation })) {
+    lane.forEach((span, i) => {
+      // Lage der Einstiche dieser Reihe im Stichraster.
+      const phase = (span.row * stagger * stitchLength) % stitchLength;
+      const { left, right } = span;
 
       // Die Einstiche sitzen auf einem **festen Raster**, nicht relativ zum
       // Anfang der Strecke. Das ist der Unterschied, der zählt: Wandert die
@@ -77,16 +65,9 @@ export function tatamiRows(shape: Shape, options: TatamiOptions = {}): Point[][]
       if (right - (xs[xs.length - 1] as number) < MIN_STITCH_MM && xs.length > 1) xs.pop();
       xs.push(right);
 
-      spans.push({ row: index, y, left, right, xs });
-    }
-  }
-
-  const rows: Point[][] = [];
-  for (const lane of toLanes(spans)) {
-    lane.forEach((span, i) => {
       // Innerhalb einer Bahn abwechselnd hin und her, damit der Faden
       // am Ende einer Reihe gleich die nächste beginnt.
-      const run = i % 2 === 0 ? span.xs : [...span.xs].reverse();
+      const run = i % 2 === 0 ? xs : [...xs].reverse();
       rows.push(run.map((x) => rotate({ x, y: span.y }, angle)));
     });
   }
@@ -95,13 +76,48 @@ export function tatamiRows(shape: Shape, options: TatamiOptions = {}): Point[][]
 }
 
 /** Eine Teilstrecke einer Reihe, im gedrehten Koordinatensystem. */
-interface Span {
+export interface Span {
   row: number;
   y: number;
   left: number;
   right: number;
-  /** Die Einstiche von links nach rechts. */
-  xs: number[];
+}
+
+/**
+ * Die Fläche in Reihen schneiden und die Teilstrecken zu Bahnen ordnen.
+ *
+ * Füllstich und Satinstich unterscheiden sich nur darin, was sie aus einer
+ * Teilstrecke machen: Der Füllstich setzt Einstiche **entlang** der Strecke,
+ * der Satinstich stickt **quer** von Kante zu Kante. Das Zerschneiden der
+ * Form — Löcher, Einbuchtungen, Bahnen — ist für beide dasselbe.
+ *
+ * Die Strecken kommen im gedrehten System zurück, in dem die Reihen
+ * waagerecht liegen. `rotate({ x, y: span.y }, angle)` führt zurück.
+ */
+export function spanLanes(
+  shape: Shape,
+  options: { spacing: number; angle: number; pullCompensation: number },
+): Span[][] {
+  const { spacing, angle, pullCompensation } = options;
+
+  // In ein Koordinatensystem drehen, in dem die Reihen waagerecht liegen.
+  const local = rotateShape(shape, -angle);
+  const b = shapeBounds(local);
+  if (!isFinite(b.minY) || b.maxY - b.minY < 1e-9) return [];
+
+  const spans: Span[] = [];
+  let index = 0;
+  for (let y = b.minY + spacing / 2; y <= b.maxY; y += spacing, index++) {
+    for (const [rawLeft, rawRight] of scanlineSpans(local, y)) {
+      // Zugausgleich: die Strecke nach beiden Seiten verbreitern.
+      const left = rawLeft - pullCompensation;
+      const right = rawRight + pullCompensation;
+      if (right - left < MIN_STITCH_MM) continue;
+      spans.push({ row: index, y, left, right });
+    }
+  }
+
+  return toLanes(spans);
 }
 
 /** Überlappen sich zwei Teilstrecken in x? */

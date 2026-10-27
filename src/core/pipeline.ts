@@ -5,12 +5,12 @@
  * über einen Nächster-Nachbar-Weg verbinden, lange Wege als Sprung mit
  * Schnitt. Verriegelt wird je Fadenstück, darum kümmert sich der Builder.
  */
-import { FILL_SPACING_MM, SATIN_MAX_WIDTH_MM } from './constants.ts';
+import { FILL_SPACING_MM, SATIN_MAX_WIDTH_MM, SATIN_SPACING_MM } from './constants.ts';
 import { approximateWidth, normalizeShape, shapeBounds } from './geometry/polygon.ts';
 import type { Shape } from './geometry/polygon.ts';
 import { StitchBuilder, dist } from './stitch/builder.ts';
 import { fillArea } from './stitch/fill.ts';
-import { satinLayers } from './stitch/satin.ts';
+import { satinArea } from './stitch/satin.ts';
 import type { Point, StitchPlan, ThreadColor } from './types.ts';
 import type { TracedArea } from '../image/trace.ts';
 
@@ -71,31 +71,6 @@ function nearestNeighbourOrder(areas: TracedArea[]): TracedArea[] {
   return out;
 }
 
-/** Mittellinie einer schmalen Fläche, grob über die lange Achse. */
-function spineOf(shape: Shape): { center: Point[]; width: number } {
-  const b = shapeBounds(shape);
-  const w = b.maxX - b.minX;
-  const h = b.maxY - b.minY;
-  if (w >= h) {
-    const y = (b.minY + b.maxY) / 2;
-    return {
-      center: [
-        { x: b.minX, y },
-        { x: b.maxX, y },
-      ],
-      width: h,
-    };
-  }
-  const x = (b.minX + b.maxX) / 2;
-  return {
-    center: [
-      { x, y: b.minY },
-      { x, y: b.maxY },
-    ],
-    width: w,
-  };
-}
-
 export interface BuildPlanOptions {
   /** Ab dieser Weglänge wird gesprungen und geschnitten statt durchgestickt. */
   jumpThresholdMm?: number;
@@ -142,11 +117,7 @@ function stitchArea(builder: StitchBuilder, raw: Shape, settings: AreaSettings):
   }
 
   if (settings.stitchType === 'satin') {
-    const { center, width } = spineOf(shape);
-    const layers = satinLayers(center, width);
-    builder.runPath(layers.centerRun);
-    builder.runPath(layers.underlay);
-    builder.runPath(layers.top);
+    satinArea(builder, shape, { spacing: SATIN_SPACING_MM });
     return;
   }
 

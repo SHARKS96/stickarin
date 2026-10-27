@@ -12,9 +12,10 @@ import {
   RAISED_UNDERLAY_SPACING_MM,
   UNDERLAY_SPACING_MM,
 } from '../constants.ts';
-import { insetShape, normalizeShape, offsetRingInward, pointInShape } from '../geometry/polygon.ts';
+import { insetShape, normalizeShape } from '../geometry/polygon.ts';
 import type { Shape } from '../geometry/polygon.ts';
 import { tatamiRows } from './tatami.ts';
+import { coveredArea, outsetBy, staysInside } from './travel.ts';
 import type { StitchBuilder } from './builder.ts';
 import type { Point } from '../types.ts';
 
@@ -81,31 +82,12 @@ export function fillArea(builder: StitchBuilder, raw: Shape, options: FillOption
   for (const hole of rim.holes) builder.runLoop(hole);
 }
 
-/**
- * Die Fläche um `d` vergrößern: außen weiter hinaus, in ein Loch hinein.
- *
- * Das ist genau die Fläche, die die Füllreihen mit Zugausgleich bedecken —
- * jede Reihe läuft `d` über die Sollkante hinaus, an der Außenkante wie am
- * Lochrand. `offsetRingInward` rechnet dabei in Material: Ein negativer
- * Wert bedeutet mehr Material, bei beiden Ringarten.
- */
-function outsetBy(shape: Shape, d: number): Shape {
-  return {
-    outer: offsetRingInward(shape.outer, -d),
-    holes: shape.holes.map((h) => offsetRingInward(h, -d)),
-  };
-}
-
 function runRows(
   builder: StitchBuilder,
   shape: Shape,
   options: { spacing: number; angle: number },
 ): void {
-  // Geprüft wird gegen die Fläche, die die Reihen tatsächlich bedecken —
-  // also einschließlich Zugausgleich. Die Verbindung zwischen zwei Reihen
-  // läuft genau auf dieser Außenkante; gegen die Sollkante geprüft würde
-  // jeder Reihenwechsel als Austritt gelten.
-  const covered = outsetBy(shape, PULL_COMPENSATION_MM + TRAVEL_TOLERANCE_MM);
+  const covered = coveredArea(shape);
 
   for (const row of tatamiRows(shape, options)) {
     const first = row[0];
@@ -120,20 +102,4 @@ function runRows(
 
     for (const p of row) builder.stitchTo(p as Point);
   }
-}
-
-/** Wie viele Zwischenpunkte geprüft werden; mehr kostet nur Rechenzeit. */
-const TRAVEL_SAMPLES = 8;
-
-/** Spielraum, damit ein Punkt genau auf der Kante nicht als außen gilt. */
-const TRAVEL_TOLERANCE_MM = 0.1;
-
-/** Liegt die ganze Strecke von `a` nach `b` innerhalb der Fläche? */
-function staysInside(shape: Shape, a: Point, b: Point): boolean {
-  for (let i = 1; i < TRAVEL_SAMPLES; i++) {
-    const t = i / TRAVEL_SAMPLES;
-    const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-    if (!pointInShape(shape, p)) return false;
-  }
-  return true;
 }

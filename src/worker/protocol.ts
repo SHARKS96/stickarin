@@ -45,6 +45,14 @@ export interface AreaInfo {
   areaMm2: number;
   /** Kürzeste Breite — entscheidet über die automatische Stichart. */
   widthMm: number;
+  /**
+   * Wie breit die Fläche quer zur Satinrichtung im Mittel ist.
+   *
+   * Nicht dasselbe wie `widthMm`: Das umschließende Rechteck einer „7“ ist
+   * in beide Richtungen vierzig Millimeter, der Strich selbst acht. Daran
+   * sieht der Nutzer, ob sich Satin für diese Fläche überhaupt eignet.
+   */
+  satinWidthMm: number;
   defaults: AreaSettings;
 }
 

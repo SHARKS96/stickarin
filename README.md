@@ -93,8 +93,9 @@ der Stichplan geht als typisierte Felder über die Grenze und wird
 
 **Noch vereinfacht:**
 
-- Die Satin-Mittellinie wird über die lange Achse der Bounding-Box
-  geschätzt, nicht aus der Form abgeleitet.
+- Die Satinrichtung wird aus zwölf Probeschnitten gewählt, nicht aus einer
+  echten Mittelachse. Bei einer Form, die in verschiedenen Teilen
+  verschieden läuft, gilt eine Richtung für das Ganze.
 - Der Polygonversatz löst Selbstschnitte nicht auf, sondern wirft
   umgestülpte Ecken weg. Bei stark verwinkelten Formen kann der Kantenlauf
   dadurch lückenhaft werden.
