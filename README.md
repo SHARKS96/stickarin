@@ -121,5 +121,11 @@ Damit das greift, muss in den Repository-Einstellungen unter
 
 ## Lizenz
 
-Eigener Code, ohne Ink/Stitch-Übernahmen — deshalb ist die App **nicht** an die
-GPL gebunden.
+[GNU General Public License v3](LICENSE).
+
+Der Code ist durchgehend eigener; aus Ink/Stitch wurde nichts übernommen. Die
+GPL ist hier also eine Entscheidung und keine Auflage — und weil sie gefallen
+ist, stünde einer späteren Übernahme von Ink/Stitch-Algorithmen auch nichts
+mehr im Weg.
+
+`reference/stickcore.mjs` gehört zum Projekt und fällt unter dieselbe Lizenz.

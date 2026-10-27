@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Stickarin: Bild rein, direkt stickbare Bernina-EXP raus.",
+  "license": "GPL-3.0-or-later",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
