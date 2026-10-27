@@ -12,12 +12,20 @@ import { approximateWidth } from '../core/geometry/polygon.ts';
 import { planStats, toCompactPlan } from '../core/types.ts';
 import type { StitchPlan, ThreadColor } from '../core/types.ts';
 import type { Rgb } from '../image/color.ts';
+import { paletteAncestors } from '../image/ancestry.ts';
 import { quantize } from '../image/quantize.ts';
 import { traceAreas } from '../image/trace.ts';
 import type { TracedArea } from '../image/trace.ts';
 import type { AreaInfo, WorkerRequest, WorkerResponse } from './protocol.ts';
 
 let lastPlan: StitchPlan | null = null;
+
+/**
+ * Das Ergebnis der vorigen Farbreduktion. Daraus leitet sich ab, aus welcher
+ * alten Farbe jede neue hervorgegangen ist — die Oberfläche hängt ihre
+ * Einstellungen daran.
+ */
+let lastQuantize: { palette: Rgb[]; indices: Int16Array } | null = null;
 
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
@@ -51,6 +59,9 @@ function compute(request: Extract<WorkerRequest, { type: 'compute' }>): WorkerRe
     tolerance: options.tolerance,
   });
 
+  const previous = lastQuantize;
+  lastQuantize = { palette: q.palette, indices: q.indices };
+
   if (q.palette.length === 0) {
     lastPlan = null;
     return {
@@ -63,6 +74,8 @@ function compute(request: Extract<WorkerRequest, { type: 'compute' }>): WorkerRe
       stats: null,
       threads: [],
       backgroundIndex: null,
+      ancestors: [],
+      ancestorsOf: previous?.palette ?? [],
     };
   }
 
@@ -87,6 +100,10 @@ function compute(request: Extract<WorkerRequest, { type: 'compute' }>): WorkerRe
     stats: lastPlan ? planStats(lastPlan) : null,
     threads: plan.threads,
     backgroundIndex: dominantBorderColor(q.indices, q.width, q.height),
+    ancestors: previous
+      ? paletteAncestors(q.indices, q.palette.length, previous.indices, previous.palette.length)
+      : [],
+    ancestorsOf: previous?.palette ?? [],
   };
 }
 

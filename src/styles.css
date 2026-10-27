@@ -281,6 +281,72 @@ a:hover {
   width: 100%;
 }
 
+/* Werkzeug-Schalter: an oder aus, nicht „jetzt hier drücken“.
+   Ein zweiter voller Akzentknopf neben „Fertig“ sähe aus wie eine zweite
+   Hauptaktion; der Zustand stünde dann nur noch in der Farbe. Hier trägt
+   ihn zusätzlich ein Wort. */
+.btn.tool {
+  min-height: 64px;
+  padding: 0 14px 0 22px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 2px transparent;
+}
+
+.btn.tool .label {
+  margin-right: auto;
+}
+
+.btn.tool .state {
+  min-width: 62px;
+  padding: 6px 16px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 19px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.btn.tool[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.btn.tool[aria-pressed='true'] .state {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Die Pipette ist scharf: Der Rahmen gehört ans Bild, nicht an den Kasten
+   drumherum — sonst steht er bei einem kleinen Bild weit daneben. */
+.canvas.plain img.armed {
+  outline: 3px dashed var(--accent);
+  outline-offset: 5px;
+}
+
+/* Die getippten Farben, damit man sieht, was man weggenommen hat. */
+.picked {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.picked .dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Ein heller Tipp — und das ist meistens der Hintergrund — wäre auf der
+   weißen Karte sonst nicht zu sehen. */
+.swatch.dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 20%);
+}
+
 /* Runder Plus/Minus-Knopf */
 .round {
   width: 72px;
@@ -723,6 +789,7 @@ label.field {
 /* ---------- Rahmen und Vorschau ---------- */
 
 .stage .canvas {
+  position: relative;
   flex: 1;
   min-height: 260px;
   display: flex;
@@ -1074,6 +1141,26 @@ dialog.help li::before {
   gap: 10px;
   font-size: 19px;
   color: var(--ink-soft);
+}
+
+/* Während gerechnet wird, bleibt das alte Bild stehen und wird blass.
+   Es verschwinden zu lassen, ließe den halben Schirm zusammenklappen —
+   und ohne jeden Hinweis sähe der Tipp mit der Pipette eine Sekunde lang
+   wirkungslos aus. */
+.stale {
+  opacity: 0.45;
+  transition: opacity 0.15s ease;
+}
+
+.busy.overlay {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 15%);
 }
 
 .busy::before {

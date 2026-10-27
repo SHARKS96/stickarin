@@ -143,18 +143,33 @@ export function quantize(
     a.n++;
   }
 
-  const palette: Rgb[] = [];
-  const counts: number[] = [];
+  // Die Reihenfolge der Zentren ist ein Zufallsprodukt des k-Means: Sie
+  // hängt daran, welches Pixel die Stichprobe zuerst erwischt hat. Würde
+  // sie durchgereicht, stünde die Farbliste nach jeder Rechnung anders da.
+  // Darum: größte Fläche zuerst, bei Gleichstand die hellere.
+  const found = acc
+    .map((a, c) => ({
+      center: c,
+      count: a.n,
+      rgb: { r: Math.round(a.r / a.n), g: Math.round(a.g / a.n), b: Math.round(a.b / a.n) },
+    }))
+    .filter((e) => e.count > 0)
+    .sort((x, y) => y.count - x.count || lightness(y.rgb) - lightness(x.rgb));
+
+  const palette: Rgb[] = found.map((e) => e.rgb);
+  const counts: number[] = found.map((e) => e.count);
   const remap = new Int16Array(centers.length).fill(-1);
-  acc.forEach((a, c) => {
-    if (a.n === 0) return;
-    remap[c] = palette.length;
-    palette.push({ r: Math.round(a.r / a.n), g: Math.round(a.g / a.n), b: Math.round(a.b / a.n) });
-    counts.push(a.n);
+  found.forEach((e, position) => {
+    remap[e.center] = position;
   });
   for (const i of active) indices[i] = remap[indices[i] as number] as number;
 
   return { indices, palette, width, height, counts };
+}
+
+/** Nur für die Sortierung: ein Helligkeitswert, der Gleichstände eindeutig macht. */
+function lightness(rgb: Rgb): number {
+  return 0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b;
 }
 
 /** Gleichmäßige Stichprobe, damit die Zentren auch bei großen Bildern flott sind. */

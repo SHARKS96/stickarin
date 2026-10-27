@@ -84,4 +84,39 @@ describe('quantize', () => {
     const r = quantize(data, width, height, { colors: 4, pinned: [BLUE] });
     expect(has(r.palette, BLUE)).toBe(true);
   });
+
+  it('sortiert die Palette nach Flächengröße', () => {
+    // Ohne feste Reihenfolge entscheidet der Zufall der Startbelegung,
+    // an welcher Stelle eine Farbe landet — und die Farbliste stünde nach
+    // jeder Rechnung anders da.
+    const { data, width, height } = synthetic();
+    const { palette, counts } = quantize(data, width, height, { colors: 4 });
+    expect(counts).toEqual([...counts].sort((a, b) => b - a));
+    // Der Hintergrund ist die größte Fläche und steht damit vorn.
+    expect(has([palette[0] as Rgb], BACKGROUND)).toBe(true);
+  });
+
+  it('wirft die übrigen Farben nicht durcheinander, wenn eine wegfällt', () => {
+    // Der Fehlerfall aus der App: Ein Tipp mit der Pipette nahm den
+    // Hintergrund weg — und danach war jede Farbe an einer anderen Stelle.
+    const { data, width, height } = synthetic();
+    const before = quantize(data, width, height, { colors: 4 }).palette;
+    const after = quantize(data, width, height, {
+      colors: 4,
+      ignored: [BACKGROUND],
+      tolerance: 10,
+    }).palette;
+
+    const names = (palette: Rgb[]): string[] =>
+      palette.map((p) => {
+        if (has([p], BACKGROUND)) return 'Hintergrund';
+        if (has([p], RED)) return 'Rot';
+        if (has([p], BLUE)) return 'Blau';
+        if (has([p], YELLOW)) return 'Gelb';
+        return '?';
+      });
+
+    const rest = names(before).filter((n) => n !== 'Hintergrund');
+    expect(names(after).filter((n) => rest.includes(n))).toEqual(rest);
+  });
 });

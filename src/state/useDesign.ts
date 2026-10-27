@@ -21,6 +21,7 @@ import { toHex } from '../image/color.ts';
 import type { Rgb } from '../image/color.ts';
 import type { AreaInfo, WorkImage } from '../worker/protocol.ts';
 import { useStitchWorker } from './useStitchWorker.ts';
+import { inheritKeys, inheritOrder, matchPalette, samePalette } from './palette.ts';
 import { deleteDesign, listDesigns, loadDesign, saveDesign } from './storage.ts';
 import type { SavedDesign, SavedDesignSummary } from './storage.ts';
 
@@ -43,6 +44,21 @@ export interface ColorEntry {
   name: string;
   catalog: string;
   ignored: boolean;
+}
+
+/**
+ * Alle Farbentscheidungen auf einen Schlag — für „Abbrechen“.
+ *
+ * Die Palette gehört dazu: Die übrigen Felder sind über Palettenindizes
+ * adressiert und ohne sie nicht zu deuten.
+ */
+export interface ColorSnapshot {
+  palette: Rgb[];
+  tolerance: number;
+  ignoredSamples: Rgb[];
+  colorNames: Record<number, string>;
+  ignoredColors: Record<number, boolean>;
+  order: number[] | null;
 }
 
 /** Einstellungen einer Fläche, wie sie der Schirm „Erweitert“ zeigt. */
@@ -78,7 +94,11 @@ export function useDesign() {
   }, []);
   useEffect(refreshGallery, [refreshGallery]);
 
+  // Die Palette, auf die sich die index-adressierten Einstellungen beziehen.
+  const knownPalette = useRef<Rgb[] | null>(null);
+
   const resetDerived = useCallback(() => {
+    knownPalette.current = null;
     setColorNames({});
     setIgnoredColors({});
     setOrder(null);
@@ -110,6 +130,36 @@ export function useDesign() {
     autoBackgroundDone.current = true;
     setIgnoredColors((m) => ({ ...m, [backgroundIndex]: true }));
   }, [backgroundIndex]);
+
+  // --- Einstellungen an die neue Palette heften ------------------------
+  //
+  // Die Farbreduktion läuft nach jeder Änderung neu, und ihre Palette
+  // kommt dabei in anderer Reihenfolge und anderer Länge zurück. Ohne
+  // diesen Schritt gehörte „Rot wird nicht gestickt“ nach einem Tipp mit
+  // der Pipette plötzlich zu Blau.
+  const computed = worker.result;
+
+  useEffect(() => {
+    if (!computed) return;
+    const before = knownPalette.current;
+    knownPalette.current = computed.palette;
+    if (!before || before.length === 0 || samePalette(before, computed.palette)) return;
+
+    // Der Worker sagt aus den Pixeln heraus, aus welcher alten Farbe jede
+    // neue hervorgegangen ist. Das gilt nur, wenn er von derselben alten
+    // Palette ausging wie wir; war eine Antwort überholt, bleibt der
+    // Abgleich über den Farbabstand. Der trifft die Umnummerierung — nur
+    // einen Zerfall in zwei Farben kann er nicht auflösen.
+    const ancestors = samePalette(computed.ancestorsOf, before)
+      ? computed.ancestors
+      : matchPalette(before, computed.palette);
+
+    // Die Setter geben dasselbe Objekt zurück, wenn sich nichts ändert.
+    // React bricht dann ab, und es folgt keine Rechnung umsonst.
+    setColorNames((m) => inheritKeys(m, ancestors));
+    setIgnoredColors((m) => inheritKeys(m, ancestors));
+    setOrder((o) => inheritOrder(o, ancestors));
+  }, [computed]);
 
   // --- Farbliste ------------------------------------------------------
   const colors = useMemo<ColorEntry[]>(() => {
@@ -277,6 +327,10 @@ export function useDesign() {
     });
     setDesignId(saved.id);
     setDesignName(saved.name);
+    // Die gespeicherten Einstellungen hängen an der Palette von damals.
+    // Dieselben Eingaben ergeben sie wieder; bis dahin darf nichts
+    // umgeschrieben werden.
+    knownPalette.current = null;
     const s = saved.settings;
     setWidthMmRaw(s.widthMm);
     setHoopId(s.hoopId);
@@ -327,7 +381,10 @@ export function useDesign() {
     setTolerance: (n: number) => setTolerance(clamp(n, 0, 100)),
     ignoredSamples,
     addIgnoredSample: (rgb: Rgb) => setIgnoredSamples((s) => [...s, rgb]),
+    undoIgnoredSample: () => setIgnoredSamples((s) => s.slice(0, -1)),
     clearIgnoredSamples: () => setIgnoredSamples([]),
+    snapshotColors,
+    restoreColors,
     colors,
     setColorName: (index: number, name: string) => setColorNames((m) => ({ ...m, [index]: name })),
     toggleColorIgnored: (index: number) => setIgnoredColors((m) => ({ ...m, [index]: !m[index] })),
@@ -361,6 +418,32 @@ export function useDesign() {
     open,
     forget,
   };
+
+  /** Den jetzigen Stand aller Farbentscheidungen festhalten. */
+  function snapshotColors(): ColorSnapshot {
+    return {
+      palette: knownPalette.current ?? [],
+      tolerance,
+      ignoredSamples,
+      colorNames,
+      ignoredColors,
+      order,
+    };
+  }
+
+  /** Genau diesen Stand wiederherstellen — „Abbrechen“. */
+  function restoreColors(snapshot: ColorSnapshot): void {
+    // Zuerst die Palette: Die übrigen Felder sind über ihre Indizes
+    // adressiert. Ohne diese Zeile hielte die Umschreibung oben die
+    // wiederhergestellten Einstellungen für solche der verworfenen
+    // Palette und zöge sie ein zweites Mal um.
+    knownPalette.current = snapshot.palette;
+    setTolerance(snapshot.tolerance);
+    setIgnoredSamples(snapshot.ignoredSamples);
+    setColorNames(snapshot.colorNames);
+    setIgnoredColors(snapshot.ignoredColors);
+    setOrder(snapshot.order);
+  }
 
   function setAreaSetting(
     index: number,

@@ -29,6 +29,10 @@ export interface ComputeResult {
   stats: PlanStats | null;
   threads: ThreadColor[];
   backgroundIndex: number | null;
+  /** Je neuer Farbe die alte, aus der sie hervorgegangen ist. */
+  ancestors: (number | null)[];
+  /** Die alte Palette, auf die sich `ancestors` bezieht. */
+  ancestorsOf: Rgb[];
 }
 
 export interface StitchWorker {
@@ -72,6 +76,8 @@ export function useStitchWorker(): StitchWorker {
           stats: message.stats,
           threads: message.threads,
           backgroundIndex: message.backgroundIndex,
+          ancestors: message.ancestors,
+          ancestorsOf: message.ancestorsOf,
         });
         setError(null);
         setBusy(false);
