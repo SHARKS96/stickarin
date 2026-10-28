@@ -71,6 +71,7 @@ src/
 
 assets/                    Quelldateien der Marke (SVG)
 scripts/generate-icons.mjs assets/icons/*.svg → src/ui/Icons.tsx
+scripts/make-stitch-test.mts Probestickdatei zum Gegensticken
 ```
 
 `core/` und `image/` kennen kein DOM und sind damit einzeln testbar. Die
