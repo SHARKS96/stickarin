@@ -14,13 +14,16 @@ import {
   SIZE_STEP_MM,
 } from '../core/constants.ts';
 import type { HoopId } from '../core/constants.ts';
-import type { AreaSettings, StitchType } from '../core/pipeline.ts';
+import type { AreaSettings, LineSettings, StitchType } from '../core/pipeline.ts';
 import type { ThreadChoice } from '../core/threads.ts';
 import type { ExportedFile } from '../core/export.ts';
 import type { PlanStats, StitchPlan } from '../core/types.ts';
 import { toHex } from '../image/color.ts';
 import type { Rgb } from '../image/color.ts';
-import type { AreaInfo, WorkImage } from '../worker/protocol.ts';
+import type { AreaInfo, LineInfo, SourceInput, WorkImage } from '../worker/protocol.ts';
+import { colorCountOf } from '../vector/plan.ts';
+import { toPreviewUrl } from '../vector/preview.ts';
+import { parseSvg } from '../vector/svg.ts';
 import { useStitchWorker } from './useStitchWorker.ts';
 import { inheritKeys, inheritOrder, matchPalette, samePalette } from './palette.ts';
 import { deleteDesign, listDesigns, loadDesign, saveDesign } from './storage.ts';
@@ -29,12 +32,26 @@ import type { SavedDesign, SavedDesignSummary } from './storage.ts';
 /** Oberhalb dieser Breite wird das Bild vor dem Rechnen verkleinert. */
 const WORK_WIDTH = 360;
 
-export interface LoadedImage {
+/**
+ * Eine geladene Vorlage — ein Pixelbild oder eine Vektorzeichnung.
+ *
+ * Alles, was die Oberfläche von einer Vorlage braucht, steht hier; welcher
+ * der beiden Wege es ist, muss nur an den wenigen Stellen bekannt sein, an
+ * denen es wirklich einen Unterschied macht (die Pipette etwa gibt es nur
+ * beim Pixelbild).
+ */
+export interface LoadedSource {
   name: string;
-  /** Verkleinerte Arbeitskopie; alles rechnet darauf. */
-  work: WorkImage;
-  /** Für die Anzeige, inklusive Pipette. */
+  /** Das, womit der Worker rechnet. */
+  source: SourceInput;
+  /** Für die Anzeige; beim Vektorweg die gelesene Zeichnung selbst. */
   previewUrl: string;
+  /** Höhe geteilt durch Breite — Rahmen und Vorschau hängen daran. */
+  aspect: number;
+  /** Die Arbeitskopie für die Pipette; bei einer Vektorzeichnung `null`. */
+  work: WorkImage | null;
+  /** Was an der Datei nicht stickbar war, in Worten für den Nutzer. */
+  warnings: string[];
 }
 
 export interface ColorEntry {
@@ -77,10 +94,16 @@ export interface AreaView extends AreaInfo {
   raised: boolean;
 }
 
+/** Einstellungen eines Strichs, wie sie der Schirm „Erweitert“ zeigt. */
+export interface LineView extends LineInfo {
+  index: number;
+  stitchType: LineSettings['stitchType'];
+}
+
 export function useDesign() {
   const worker = useStitchWorker();
 
-  const [image, setImageRaw] = useState<LoadedImage | null>(null);
+  const [source, setSourceRaw] = useState<LoadedSource | null>(null);
   const [designId, setDesignId] = useState<string | null>(null);
   const [designName, setDesignName] = useState('Stickbild');
 
@@ -96,6 +119,7 @@ export function useDesign() {
   const [threads, setThreads] = useState<Record<number, ThreadChoice>>({});
   const [order, setOrder] = useState<number[] | null>(null);
   const [areaOverrides, setAreaOverrides] = useState<Record<number, AreaSettings>>({});
+  const [lineOverrides, setLineOverrides] = useState<Record<number, LineSettings>>({});
 
   const [gallery, setGallery] = useState<SavedDesignSummary[]>([]);
   const refreshGallery = useCallback(() => {
@@ -113,6 +137,7 @@ export function useDesign() {
     setThreads({});
     setOrder(null);
     setAreaOverrides({});
+    setLineOverrides({});
     setIgnoredSamples([]);
   }, []);
 
@@ -121,15 +146,21 @@ export function useDesign() {
   // anschaltet und an den Reglern dreht.
   const autoBackgroundDone = useRef(false);
 
-  const setImage = useCallback(
-    (img: LoadedImage | null) => {
-      setImageRaw((prev) => {
-        if (prev) URL.revokeObjectURL(prev.previewUrl);
-        return img;
+  const setSource = useCallback(
+    (next: LoadedSource | null) => {
+      setSourceRaw((prev) => {
+        releasePreview(prev);
+        return next;
       });
       setDesignId(null);
       autoBackgroundDone.current = false;
       resetDerived();
+      // Eine Vektorzeichnung sagt ihre Farben selbst; die Vorgabe ist
+      // darum genau das, was in der Datei steht. Beim Pixelbild bleibt
+      // es bei der eingestellten Zahl, dort gibt es nichts zu übernehmen.
+      if (next?.source.kind === 'vector') {
+        setColorCountRaw(clamp(colorCountOf(next.source.doc), 1, MAX_COLORS));
+      }
     },
     [resetDerived],
   );
@@ -224,6 +255,19 @@ export function useDesign() {
     );
   }, [worker.result, areaOverrides, ignoredColors]);
 
+  // --- Striche ---------------------------------------------------------
+  const lines = useMemo<LineView[]>(() => {
+    const infos = worker.result?.lines ?? [];
+    return infos
+      .map((info, index) => ({ info, index }))
+      .filter(({ info }) => !ignoredColors[info.colorIndex])
+      .map(({ info, index }) => ({
+        ...info,
+        index,
+        stitchType: lineOverrides[index]?.stitchType ?? info.defaults.stitchType,
+      }));
+  }, [worker.result, lineOverrides, ignoredColors]);
+
   // --- Rechnung anstoßen ----------------------------------------------
   // Der Worker bekommt immer den vollständigen Satz Einstellungen; was
   // sich geändert hat, muss hier niemand wissen.
@@ -231,8 +275,8 @@ export function useDesign() {
   colorsRef.current = colors;
 
   useEffect(() => {
-    if (!image) return;
-    worker.compute(image.work, {
+    if (!source) return;
+    worker.compute(source.source, {
       colorCount,
       tolerance,
       ignoredSamples,
@@ -245,17 +289,19 @@ export function useDesign() {
         ...(c.threadChosen ? { thread: c.thread } : {}),
       })),
       areaSettings: areaOverrides,
+      lineSettings: lineOverrides,
     });
     // `colors` hängt am Ergebnis des Workers; es hier mitzuhorchen würde
     // jede Antwort sofort eine neue Anfrage auslösen. Darum über die Ref.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    image,
+    source,
     colorCount,
     tolerance,
     ignoredSamples,
     widthMm,
     areaOverrides,
+    lineOverrides,
     colorNames,
     ignoredColors,
     threads,
@@ -264,7 +310,7 @@ export function useDesign() {
 
   // --- Abgeleitete Größen ---------------------------------------------
   const hoop = hoopById(hoopId);
-  const aspect = image ? image.work.height / image.work.width : 1;
+  const aspect = source ? source.aspect : 1;
   const rotated = rotationDeg % 180 !== 0;
   const heightMm = widthMm * aspect;
   const outerWidth = rotated ? heightMm : widthMm;
@@ -293,7 +339,7 @@ export function useDesign() {
 
   const remember = useCallback(
     async (thumbnail: string) => {
-      if (!image) return;
+      if (!source) return;
       const id = designId ?? crypto.randomUUID();
       setDesignId(id);
       const saved: SavedDesign = {
@@ -301,7 +347,15 @@ export function useDesign() {
         name: designName,
         savedAt: Date.now(),
         thumbnail,
-        image: { data: image.work.data, width: image.work.width, height: image.work.height },
+        ...(source.source.kind === 'image'
+          ? {
+              image: {
+                data: source.source.image.data,
+                width: source.source.image.width,
+                height: source.source.image.height,
+              },
+            }
+          : { vector: source.source.doc }),
         settings: {
           widthMm,
           hoopId,
@@ -314,12 +368,13 @@ export function useDesign() {
           threads,
           order,
           areaSettings: areaOverrides,
+          lineSettings: lineOverrides,
         },
       };
       if (await saveDesign(saved)) refreshGallery();
     },
     [
-      image,
+      source,
       designId,
       designName,
       widthMm,
@@ -333,6 +388,7 @@ export function useDesign() {
       threads,
       order,
       areaOverrides,
+      lineOverrides,
       refreshGallery,
     ],
   );
@@ -340,14 +396,11 @@ export function useDesign() {
   const open = useCallback(async (id: string) => {
     const saved = await loadDesign(id);
     if (!saved) return false;
-    const work: WorkImage = {
-      data: new Uint8ClampedArray(saved.image.data),
-      width: saved.image.width,
-      height: saved.image.height,
-    };
-    setImageRaw((prev) => {
-      if (prev) URL.revokeObjectURL(prev.previewUrl);
-      return { name: saved.name, work, previewUrl: saved.thumbnail };
+    const restored = sourceOf(saved);
+    if (!restored) return false;
+    setSourceRaw((prev) => {
+      releasePreview(prev);
+      return restored;
     });
     setDesignId(saved.id);
     setDesignName(saved.name);
@@ -368,6 +421,9 @@ export function useDesign() {
     setThreads(s.threads ?? {});
     setOrder(s.order);
     setAreaOverrides(s.areaSettings);
+    // Striche gibt es erst seit dem Vektorweg; ältere Stickbilder kennen
+    // das Feld nicht.
+    setLineOverrides(s.lineSettings ?? {});
     return true;
   }, []);
 
@@ -380,9 +436,15 @@ export function useDesign() {
   );
 
   return {
-    // Bild
-    image,
-    setImage,
+    // Vorlage
+    source,
+    setSource,
+    /** Kommt das Motiv aus einer Vektorzeichnung? */
+    isVector: source?.source.kind === 'vector',
+    /** Die Arbeitskopie des Pixelbildes — die Pipette braucht sie. */
+    workImage: source?.work ?? null,
+    /** Was an der Vorlage nicht stickbar war. */
+    warnings: source?.warnings ?? [],
     designName,
     setDesignName,
 
@@ -402,7 +464,15 @@ export function useDesign() {
 
     // Farben
     colorCount,
-    setColorCount: (n: number) => setColorCountRaw(clamp(n, 1, 8)),
+    /**
+     * Mehr Garne als Farben in der Datei kann es beim Vektorweg nicht
+     * geben: Dort wird nichts gefunden, sondern nur zusammengelegt.
+     */
+    maxColorCount:
+      source?.source.kind === 'vector'
+        ? Math.min(MAX_COLORS, Math.max(1, colorCountOf(source.source.doc)))
+        : MAX_COLORS,
+    setColorCount: (n: number) => setColorCountRaw(clamp(n, 1, MAX_COLORS)),
     tolerance,
     setTolerance: (n: number) => setTolerance(clamp(n, 0, 100)),
     ignoredSamples,
@@ -437,10 +507,15 @@ export function useDesign() {
         return next;
       }),
 
-    // Flächen
+    // Flächen und Striche
     areas,
     setAreaSetting,
-    resetAreaSettings: () => setAreaOverrides({}),
+    lines,
+    setLineSetting,
+    resetAreaSettings: () => {
+      setAreaOverrides({});
+      setLineOverrides({});
+    },
 
     // Ergebnis
     plan: worker.result?.plan ?? null,
@@ -484,6 +559,16 @@ export function useDesign() {
     setOrder(snapshot.order);
   }
 
+  /** Stichart eines Strichs ändern: Steppstich oder Satin. */
+  function setLineSetting(index: number, patch: { stitchType?: LineSettings['stitchType'] }) {
+    setLineOverrides((m) => {
+      const info = worker.result?.lines[index];
+      if (!info) return m;
+      const base = m[index] ?? info.defaults;
+      return { ...m, [index]: { ...base, ...patch } };
+    });
+  }
+
   function setAreaSetting(
     index: number,
     patch: { stitchType?: StitchType; densityLevel?: number; raised?: boolean },
@@ -515,8 +600,52 @@ export function useDesign() {
 export type DesignState = ReturnType<typeof useDesign>;
 export type { StitchPlan, PlanStats, ExportedFile };
 
+/** Mehr Garne verlangt niemand, und die Maschine hält sonst zu oft an. */
+const MAX_COLORS = 8;
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+/**
+ * Die Vorschau freigeben, wenn sie eine ist.
+ *
+ * Ein Pixelbild zeigt sich über eine Objektadresse, die das Dokument am
+ * Leben hält, bis sie zurückgegeben wird; die Vorschau einer
+ * Vektorzeichnung steht dagegen als Datenadresse für sich.
+ */
+function releasePreview(loaded: LoadedSource | null): void {
+  if (loaded?.previewUrl.startsWith('blob:')) URL.revokeObjectURL(loaded.previewUrl);
+}
+
+/** Ein gespeichertes Stickbild zurück in eine Vorlage verwandeln. */
+function sourceOf(saved: SavedDesign): LoadedSource | null {
+  if (saved.vector) {
+    const doc = saved.vector;
+    if (doc.width <= 0) return null;
+    return {
+      name: saved.name,
+      source: { kind: 'vector', doc },
+      previewUrl: toPreviewUrl(doc),
+      aspect: doc.height / doc.width,
+      work: null,
+      warnings: doc.warnings,
+    };
+  }
+  if (!saved.image) return null;
+  const work: WorkImage = {
+    data: new Uint8ClampedArray(saved.image.data),
+    width: saved.image.width,
+    height: saved.image.height,
+  };
+  return {
+    name: saved.name,
+    source: { kind: 'image', image: work },
+    previewUrl: saved.thumbnail,
+    aspect: work.height / work.width,
+    work,
+    warnings: [],
+  };
 }
 
 function nearestDensityLevel(spacingMm: number): number {
@@ -579,8 +708,66 @@ function hueOf(r: number, g: number, b: number): number {
   return h < 0 ? h + 360 : h;
 }
 
-/** Datei -> verkleinerte Arbeitskopie plus Vorschau-URL. */
-export async function loadImageFile(file: File): Promise<LoadedImage> {
+/**
+ * Eine gewählte Datei öffnen — als Vektorzeichnung oder als Pixelbild.
+ *
+ * Die Entscheidung fällt an der Datei selbst. Ein SVG durch den
+ * Bildzweig zu schicken wäre naheliegend (der Browser kann es ja
+ * anzeigen), hieße aber, es zu rastern und alles wieder zu raten, was
+ * darin ausdrücklich steht.
+ */
+export async function loadSourceFile(file: File): Promise<LoadedSource> {
+  return isSvg(file) ? loadVectorFile(file) : loadImageFile(file);
+}
+
+function isSvg(file: File): boolean {
+  return file.type === 'image/svg+xml' || /\.svgz?$/i.test(file.name);
+}
+
+/**
+ * Den Text einer Zeichnung lesen, auch wenn sie gepackt ist.
+ *
+ * Inkscape bietet „Komprimiertes SVG“ als Standardformat an; so eine Datei
+ * beginnt mit den zwei Bytes 1f 8b und ist sonst dasselbe. Erkannt wird sie
+ * am Inhalt und nicht an der Endung, denn die ist oft trotzdem `.svg`.
+ */
+async function svgText(file: File): Promise<string> {
+  const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+  if (head[0] !== 0x1f || head[1] !== 0x8b) return file.text();
+  if (typeof DecompressionStream === 'undefined') {
+    throw new Error(
+      'Diese Zeichnung ist gepackt (SVGZ). Speichern Sie sie als einfaches SVG und versuchen Sie es noch einmal.',
+    );
+  }
+  return new Response(file.stream().pipeThrough(new DecompressionStream('gzip'))).text();
+}
+
+/** Der Dateiname ohne Endung — der Vorschlag für den Namen des Stickbilds. */
+function baseName(file: File): string {
+  return file.name.replace(/\.[^.]+$/, '');
+}
+
+async function loadVectorFile(file: File): Promise<LoadedSource> {
+  const doc = parseSvg(await svgText(file));
+  if (doc.width <= 0 || doc.height <= 0 || doc.elements.length === 0) {
+    throw new Error(
+      doc.warnings[0] ?? 'In dieser Zeichnung ist nichts zu finden, was sich sticken ließe.',
+    );
+  }
+  return {
+    name: baseName(file),
+    source: { kind: 'vector', doc },
+    // Gezeigt wird die gelesene Zeichnung, nicht die Datei: So sieht der
+    // Nutzer schon hier, was hinterher wirklich in den Rahmen kommt.
+    previewUrl: toPreviewUrl(doc),
+    aspect: doc.height / doc.width,
+    work: null,
+    warnings: doc.warnings,
+  };
+}
+
+/** Pixelbild -> verkleinerte Arbeitskopie plus Vorschau-Adresse. */
+async function loadImageFile(file: File): Promise<LoadedSource> {
   const previewUrl = URL.createObjectURL(file);
   const bitmap = await createImageBitmap(file);
   const canvas = document.createElement('canvas');
@@ -592,9 +779,13 @@ export async function loadImageFile(file: File): Promise<LoadedImage> {
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
   const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const work: WorkImage = { data: data.data, width: canvas.width, height: canvas.height };
   return {
-    name: file.name.replace(/\.[^.]+$/, ''),
-    work: { data: data.data, width: canvas.width, height: canvas.height },
+    name: baseName(file),
+    source: { kind: 'image', image: work },
     previewUrl,
+    aspect: work.height / work.width,
+    work,
+    warnings: [],
   };
 }

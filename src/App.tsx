@@ -75,7 +75,7 @@ export function App() {
         <StartScreen
           gallery={design.gallery}
           onNew={() => {
-            design.setImage(null);
+            design.setSource(null);
             setScreen('image');
           }}
           onOpen={(id) => {
@@ -87,9 +87,9 @@ export function App() {
 
       {screen === 'image' && (
         <ImageScreen
-          onImage={(img) => {
-            design.setImage(img);
-            design.setDesignName(img.name || 'Stickbild');
+          onSource={(loaded) => {
+            design.setSource(loaded);
+            design.setDesignName(loaded.name || 'Stickbild');
             setScreen('size');
           }}
         />

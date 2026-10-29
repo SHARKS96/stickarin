@@ -108,6 +108,39 @@ describe('planVector', () => {
 
   it('gibt bei einem leeren Entwurf nichts zurück', () => {
     const plan = planVector({ width: 0, height: 0, elements: [], warnings: [] }, { widthMm: 80 });
-    expect(plan).toEqual({ palette: [], counts: [], areas: [], lines: [] });
+    expect(plan).toEqual({
+      palette: [],
+      counts: [],
+      areas: [],
+      lines: [],
+      backgroundIndex: null,
+    });
+  });
+});
+
+describe('Hintergrund erkennen', () => {
+  it('erkennt ein Rechteck hinter dem Motiv', () => {
+    const doc = svg(
+      '<rect width="100" height="100" fill="#ffffff"/>' +
+        '<circle cx="50" cy="50" r="30" fill="#ff0000"/>',
+    );
+    const plan = planVector(doc, { widthMm: 100 });
+    expect(plan.backgroundIndex).toBe(0);
+  });
+
+  it('hält eine Silhouette nicht für den Hintergrund', () => {
+    // Ein schwarzer Kreis mit etwas darauf: Die Ecken bleiben frei, also
+    // ist der Kreis das Motiv. Würde er als Hintergrund ausgeschaltet,
+    // bliebe vom Stickbild fast nichts.
+    const doc = svg(
+      '<circle cx="50" cy="50" r="50" fill="#000000"/>' +
+        '<circle cx="50" cy="50" r="10" fill="#ffffff"/>',
+    );
+    expect(planVector(doc, { widthMm: 100 }).backgroundIndex).toBeNull();
+  });
+
+  it('sieht in einer einzigen Fläche keinen Hintergrund', () => {
+    const doc = svg('<rect width="100" height="100" fill="#ffffff"/>');
+    expect(planVector(doc, { widthMm: 100 }).backgroundIndex).toBeNull();
   });
 });

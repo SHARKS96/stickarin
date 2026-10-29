@@ -49,9 +49,9 @@ export function SizeScreen({ design, onNext }: { design: DesignState; onNext: ()
                   height: Math.round(outerHeight * scale),
                 }}
               >
-                {design.image && (
+                {design.source && (
                   <img
-                    src={design.image.previewUrl}
+                    src={design.source.previewUrl}
                     alt="Motiv im Stickrahmen"
                     style={{ transform: `rotate(${design.rotationDeg}deg)` }}
                   />

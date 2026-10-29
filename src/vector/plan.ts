@@ -12,7 +12,7 @@
  * Was *nicht* passiert: raten. Kein k-Means, keine Toleranz, keine Pipette.
  * Bei einem Pixelbild muss man die Farben finden; hier stehen sie da.
  */
-import { shapeArea } from '../core/geometry/polygon.ts';
+import { pointInShape, shapeArea } from '../core/geometry/polygon.ts';
 import type { Shape } from '../core/geometry/polygon.ts';
 import type { TracedLine } from '../core/pipeline.ts';
 import type { Point } from '../core/types.ts';
@@ -40,6 +40,8 @@ export interface VectorPlan {
   counts: number[];
   areas: TracedArea[];
   lines: TracedLine[];
+  /** Das Garn des Hintergrunds, oder `null`, wenn es keinen gibt. */
+  backgroundIndex: number | null;
 }
 
 /**
@@ -61,7 +63,7 @@ const MIN_LINE_MM = 1;
 export function planVector(doc: VectorDocument, options: VectorPlanOptions): VectorPlan {
   const { widthMm, colorCount, minAreaMm2 = MIN_AREA_MM2, minLineMm = MIN_LINE_MM } = options;
   if (doc.width <= 0 || doc.height <= 0 || widthMm <= 0) {
-    return { palette: [], counts: [], areas: [], lines: [] };
+    return { palette: [], counts: [], areas: [], lines: [], backgroundIndex: null };
   }
 
   const scale = widthMm / doc.width;
@@ -94,7 +96,39 @@ export function planVector(doc: VectorDocument, options: VectorPlanOptions): Vec
     counts[colorIndex] = (counts[colorIndex] as number) + lengthMm * widthOfLine;
   }
 
-  return { palette, counts, areas, lines };
+  return {
+    palette,
+    counts,
+    areas,
+    lines,
+    backgroundIndex: backgroundOf(areas, widthMm, doc.height * scale),
+  };
+}
+
+/**
+ * Der Hintergrund: die hinterste Fläche, die bis in alle vier Ecken reicht.
+ *
+ * Eine volle Fläche Garn hinter dem Motiv kostet eine Stunde und sieht nach
+ * nichts aus; sie gehört ausgeschaltet. Die Ecken sind dabei der
+ * entscheidende Prüfstein — ein Hintergrundrechteck füllt sie, ein großer
+ * Kreis oder eine Silhouette nicht. Darum wird aus einem schwarzen Kreis
+ * nicht versehentlich „Hintergrund“ und damit ein leeres Stickbild.
+ *
+ * Gesucht wird nur unter den hintersten Flächen: Was vor etwas anderem
+ * liegt, ist kein Hintergrund. Und ohne irgendetwas davor gibt es auch
+ * keinen — dann ist diese Fläche das Motiv.
+ */
+function backgroundOf(areas: TracedArea[], widthMm: number, heightMm: number): number | null {
+  if (areas.length < 2) return null;
+  const inset = Math.min(widthMm, heightMm) * 0.01;
+  const corners: Point[] = [
+    { x: inset, y: inset },
+    { x: widthMm - inset, y: inset },
+    { x: widthMm - inset, y: heightMm - inset },
+    { x: inset, y: heightMm - inset },
+  ];
+  const first = areas[0] as TracedArea;
+  return corners.every((corner) => pointInShape(first.shape, corner)) ? first.colorIndex : null;
 }
 
 /** Wie viele Garne die Datei von sich aus mitbringt. */

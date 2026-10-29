@@ -5,10 +5,11 @@
  * Nummer nicht mehr die neueste ist, war der Nutzer schneller als die
  * Rechnung — die Antwort fliegt weg.
  */
-import type { AreaSettings } from '../core/pipeline.ts';
+import type { AreaSettings, LineSettings } from '../core/pipeline.ts';
 import type { CompactPlan, PlanStats, ThreadColor } from '../core/types.ts';
 import type { Rgb } from '../image/color.ts';
 import type { ExportedFile } from '../core/export.ts';
+import type { VectorDocument } from '../vector/types.ts';
 
 /** Die verkleinerte Arbeitskopie des Bildes. */
 export interface WorkImage {
@@ -17,9 +18,24 @@ export interface WorkImage {
   height: number;
 }
 
+/**
+ * Woraus das Motiv entsteht.
+ *
+ * Zwei Wege münden in denselben Stichplan: Beim Pixelbild müssen die
+ * Farben gefunden und die Konturen verfolgt werden, bei der
+ * Vektorzeichnung steht beides schon in der Datei. Welcher Weg es ist,
+ * entscheidet allein diese Unterscheidung — der Rest der Anwendung
+ * rechnet mit Farben, Flächen und Strichen und muss es nicht wissen.
+ */
+export type SourceInput =
+  | { kind: 'image'; image: WorkImage }
+  | { kind: 'vector'; doc: VectorDocument };
+
 export interface ComputeOptions {
   colorCount: number;
+  /** Nur beim Pixelbild: Spielraum der Pipette. */
   tolerance: number;
+  /** Nur beim Pixelbild: die mit der Pipette weggenommenen Farben. */
   ignoredSamples: Rgb[];
   widthMm: number;
   /**
@@ -37,6 +53,8 @@ export interface ComputeOptions {
   }[];
   /** Abweichende Einstellungen je Fläche, über den Flächenindex. */
   areaSettings: Record<number, AreaSettings>;
+  /** Abweichende Einstellungen je Strich, über den Strichindex. */
+  lineSettings: Record<number, LineSettings>;
 }
 
 /** Was die Oberfläche über eine erkannte Fläche wissen muss. */
@@ -56,8 +74,19 @@ export interface AreaInfo {
   defaults: AreaSettings;
 }
 
+/** Was die Oberfläche über einen erkannten Strich wissen muss. */
+export interface LineInfo {
+  colorIndex: number;
+  /** Länge des Pfades in mm. */
+  lengthMm: number;
+  /** Strichbreite in mm — entscheidet über Steppstich oder Satin. */
+  widthMm: number;
+  closed: boolean;
+  defaults: LineSettings;
+}
+
 export type WorkerRequest =
-  | { type: 'compute'; id: number; image: WorkImage; options: ComputeOptions }
+  | { type: 'compute'; id: number; source: SourceInput; options: ComputeOptions }
   | { type: 'export'; id: number; name: string };
 
 export type WorkerResponse =
@@ -67,6 +96,7 @@ export type WorkerResponse =
       palette: Rgb[];
       counts: number[];
       areas: AreaInfo[];
+      lines: LineInfo[];
       plan: CompactPlan | null;
       stats: PlanStats | null;
       threads: ThreadColor[];
