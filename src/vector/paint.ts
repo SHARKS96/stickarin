@@ -244,14 +244,21 @@ export function parseDeclarations(text: string): Declarations {
 }
 
 /**
- * Was ein Element an Stil mitbringt, in der Reihenfolge wachsenden Vorrangs
- * zusammengelegt: Stylesheet, Attribute, `style`.
+ * Was ein Element an Stil mitbringt, in der Reihenfolge wachsenden
+ * Vorrangs zusammengelegt: Attribute, Stylesheet, `style`.
+ *
+ * Dass ein `fill`-Attribut **schwächer** ist als jede Regel im
+ * Stylesheet, überrascht — es steht schließlich direkt am Element. Die
+ * Norm zählt es aber als Regel ohne jede Gewichtung, und so zeigt es auch
+ * jeder Browser. Wer seine Zeichnung im Browser prüft, soll hier dasselbe
+ * sehen.
  */
 export function ownDeclarations(element: XmlElement, sheet: StyleSheet): Declarations {
-  const out: Declarations = { ...sheet.match(element) };
+  const out: Declarations = {};
   for (const [name, value] of Object.entries(element.attrs)) {
     if (STYLE_ATTRIBUTES.has(name)) out[name] = value;
   }
+  Object.assign(out, sheet.match(element));
   const inline = element.attrs['style'];
   if (inline !== undefined) Object.assign(out, parseDeclarations(inline));
   return out;
@@ -299,10 +306,13 @@ export function resolveStyle(
     declarations['display']?.trim().toLowerCase() === 'none' ||
     declarations['visibility']?.trim().toLowerCase() === 'hidden';
 
+  // Ohne eigene Angabe gilt die geerbte Regel — aber `nonzero` am Kind
+  // schlägt ein `evenodd` der Gruppe, nicht nur umgekehrt.
+  const rule = declarations['fill-rule']?.trim().toLowerCase();
+
   return {
     fill,
-    fillRule:
-      declarations['fill-rule']?.trim().toLowerCase() === 'evenodd' ? 'evenodd' : parent.fillRule,
+    fillRule: rule === 'evenodd' || rule === 'nonzero' ? rule : parent.fillRule,
     stroke,
     strokeWidth: parseLength(declarations['stroke-width'], parent.strokeWidth),
     color: context.color,

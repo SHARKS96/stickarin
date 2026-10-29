@@ -80,16 +80,30 @@ describe('parseSvg', () => {
     expect(toHex((areas(doc)[0] as VectorArea).color)).toBe('#ed1c24');
   });
 
-  it('lässt style vor Attribut und Attribut vor Stylesheet gehen', () => {
+  it('lässt style vor Stylesheet und Stylesheet vor Attribut gehen', () => {
+    // So steht es in der Norm, und so zeigt es jeder Browser: Ein
+    // `fill`-Attribut ist die schwächste der drei Angaben.
     const doc = parseSvg(
       wrap(
         '<style>.a{fill:#ff0000}</style>' +
           '<rect class="a" fill="#00ff00" width="10" height="10"/>' +
-          '<rect class="a" fill="#00ff00" style="fill:#0000ff" x="20" width="10" height="10"/>',
+          '<rect class="a" fill="#00ff00" style="fill:#0000ff" x="20" width="10" height="10"/>' +
+          '<rect fill="#00ff00" x="40" width="10" height="10"/>',
       ),
     );
-    expect(toHex((areas(doc)[0] as VectorArea).color)).toBe('#00ff00');
+    expect(toHex((areas(doc)[0] as VectorArea).color)).toBe('#ff0000');
     expect(toHex((areas(doc)[1] as VectorArea).color)).toBe('#0000ff');
+    // Ohne passende Regel bleibt es natürlich beim Attribut.
+    expect(toHex((areas(doc)[2] as VectorArea).color)).toBe('#00ff00');
+  });
+
+  it('lässt nonzero am Kind ein evenodd der Gruppe überstimmen', () => {
+    // Zwei gleichläufige Ringe: unter evenodd ein Loch, unter nonzero voll.
+    const ringe = '<path d="M0,0H40V40H0Z M10,10H30V30H10Z"/>';
+    const geerbt = parseSvg(wrap(`<g fill-rule="evenodd">${ringe}</g>`));
+    const eigen = parseSvg(wrap(`<g fill-rule="evenodd"><g fill-rule="nonzero">${ringe}</g></g>`));
+    expect((areas(geerbt)[0] as VectorArea).shape.holes).toHaveLength(1);
+    expect((areas(eigen)[0] as VectorArea).shape.holes).toHaveLength(0);
   });
 
   it('mittelt einen Farbverlauf zu einer Garnfarbe', () => {
