@@ -283,6 +283,7 @@ export function useDesign() {
       widthMm,
       colors: colorsRef.current.map((c) => ({
         index: c.index,
+        rgb: c.rgb,
         name: c.name,
         catalog: c.catalog,
         ignored: c.ignored,
@@ -309,6 +310,19 @@ export function useDesign() {
   ]);
 
   // --- Abgeleitete Größen ---------------------------------------------
+  /**
+   * Mehr Garne als Farben in der Datei kann es beim Vektorweg nicht geben:
+   * Dort wird nichts gefunden, sondern nur zusammengelegt.
+   *
+   * Gemerkt, weil die Antwort das Bündeln der Farben voraussetzt — das
+   * bei jedem Neuzeichnen zu wiederholen, wäre bei einer bunten Zeichnung
+   * teurer als die ganze übrige Oberfläche.
+   */
+  const maxColorCount = useMemo(() => {
+    if (source?.source.kind !== 'vector') return MAX_COLORS;
+    return Math.min(MAX_COLORS, Math.max(1, colorCountOf(source.source.doc)));
+  }, [source]);
+
   const hoop = hoopById(hoopId);
   const aspect = source ? source.aspect : 1;
   const rotated = rotationDeg % 180 !== 0;
@@ -464,15 +478,8 @@ export function useDesign() {
 
     // Farben
     colorCount,
-    /**
-     * Mehr Garne als Farben in der Datei kann es beim Vektorweg nicht
-     * geben: Dort wird nichts gefunden, sondern nur zusammengelegt.
-     */
-    maxColorCount:
-      source?.source.kind === 'vector'
-        ? Math.min(MAX_COLORS, Math.max(1, colorCountOf(source.source.doc)))
-        : MAX_COLORS,
-    setColorCount: (n: number) => setColorCountRaw(clamp(n, 1, MAX_COLORS)),
+    maxColorCount,
+    setColorCount: (n: number) => setColorCountRaw(clamp(n, 1, maxColorCount)),
     tolerance,
     setTolerance: (n: number) => setTolerance(clamp(n, 0, 100)),
     ignoredSamples,

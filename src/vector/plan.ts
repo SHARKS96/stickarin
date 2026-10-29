@@ -28,6 +28,16 @@ export interface VectorPlanOptions {
    * Höchstzahl der Garne. Ohne Angabe bleibt jede Farbe der Datei eigen.
    */
   colorCount?: number;
+  /**
+   * Farben, die nicht gestickt werden.
+   *
+   * Sie bleiben für sich: Eine weggelassene Farbe mit einer gestickten
+   * zusammenzulegen, geht immer schief. Entweder verschwindet ein Teil
+   * des Motivs, weil er dem Hintergrund ähnlich sah, oder der
+   * Hintergrund wird mitgestickt — eine volle Fläche Garn, die eine
+   * Stunde kostet. Untereinander dürfen sie zusammen, das ändert nichts.
+   */
+  ignored?: Rgb[];
   /** Flächen unter dieser Größe fliegen raus. */
   minAreaMm2?: number;
   /** Striche unter dieser Länge fliegen raus. */
@@ -67,7 +77,7 @@ export function planVector(doc: VectorDocument, options: VectorPlanOptions): Vec
   }
 
   const scale = widthMm / doc.width;
-  const clusters = clusterColors(doc, colorCount);
+  const clusters = clusterColors(doc, colorCount, options.ignored ?? []);
   const palette = clusters.map((c) => c.color);
   const counts = new Array<number>(palette.length).fill(0);
   const indexOf = colorLookup(clusters);
@@ -133,7 +143,7 @@ function backgroundOf(areas: TracedArea[], widthMm: number, heightMm: number): n
 
 /** Wie viele Garne die Datei von sich aus mitbringt. */
 export function colorCountOf(doc: VectorDocument): number {
-  return clusterColors(doc, undefined).length;
+  return clusterColors(doc, undefined, []).length;
 }
 
 interface Cluster {
@@ -145,6 +155,8 @@ interface Cluster {
   weight: number;
   /** Stelle des ersten Vorkommens — bestimmt die Reihenfolge der Garne. */
   order: number;
+  /** Wird nicht gestickt und bleibt deshalb unter sich. */
+  ignored: boolean;
 }
 
 /**
@@ -155,14 +167,16 @@ interface Cluster {
  * will als die Datei Farben hat — die jeweils ähnlichsten, eins nach dem
  * anderen.
  */
-function clusterColors(doc: VectorDocument, target: number | undefined): Cluster[] {
-  let clusters = initialClusters(doc.elements);
+function clusterColors(doc: VectorDocument, target: number | undefined, ignored: Rgb[]): Cluster[] {
+  let clusters = initialClusters(doc.elements, new Set(ignored.map(toHex)));
   // Ohne Wunsch des Nutzers gibt es keine Obergrenze — dann werden nur
   // Farben zusammengelegt, die ohnehin dieselbe sind.
   const limit = target === undefined ? Infinity : Math.max(1, target);
 
   for (;;) {
     if (clusters.length <= 1) break;
+    // Bleibt nur noch ein verbotenes Paar übrig, hört das Zusammenlegen
+    // hier auf — lieber ein Garn mehr als ein zerstörtes Motiv.
     const pair = closestPair(clusters);
     if (!pair) break;
     const tooMany = clusters.length > limit;
@@ -175,7 +189,7 @@ function clusterColors(doc: VectorDocument, target: number | undefined): Cluster
   return clusters.sort((a, b) => a.order - b.order);
 }
 
-function initialClusters(elements: VectorElement[]): Cluster[] {
+function initialClusters(elements: VectorElement[], ignored: Set<string>): Cluster[] {
   const byColor = new Map<string, Cluster>();
   elements.forEach((element, index) => {
     const key = toHex(element.color);
@@ -191,6 +205,7 @@ function initialClusters(elements: VectorElement[]): Cluster[] {
       members: [element.color],
       weight,
       order: index,
+      ignored: ignored.has(key),
     });
   });
 
@@ -217,6 +232,7 @@ function initialClusters(elements: VectorElement[]): Cluster[] {
     best.members.push(cluster.color);
     best.weight += cluster.weight;
     best.order = Math.min(best.order, cluster.order);
+    best.ignored = best.ignored && cluster.ignored;
   }
   return seeds;
 }
@@ -226,11 +242,15 @@ function elementWeight(element: VectorElement): number {
   return pathLength(element.path, element.closed) * Math.max(element.width, 1e-6);
 }
 
+/** Das ähnlichste Paar, das zusammengelegt werden darf. */
 function closestPair(clusters: Cluster[]): { a: number; b: number; distance: number } | null {
   let best: { a: number; b: number; distance: number } | null = null;
   for (let i = 0; i < clusters.length; i++) {
     for (let j = i + 1; j < clusters.length; j++) {
-      const distance = labDistance((clusters[i] as Cluster).lab, (clusters[j] as Cluster).lab);
+      const one = clusters[i] as Cluster;
+      const other = clusters[j] as Cluster;
+      if (one.ignored !== other.ignored) continue;
+      const distance = labDistance(one.lab, other.lab);
       if (!best || distance < best.distance) best = { a: i, b: j, distance };
     }
   }
@@ -248,6 +268,7 @@ function merge(clusters: Cluster[], a: number, b: number): Cluster[] {
     members: [...first.members, ...second.members],
     weight: first.weight + second.weight,
     order: Math.min(first.order, second.order),
+    ignored: first.ignored && second.ignored,
   };
   return clusters.filter((_, i) => i !== a && i !== b).concat(merged);
 }

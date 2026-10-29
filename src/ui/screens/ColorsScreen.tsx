@@ -4,11 +4,11 @@
  * Links eine Vorschau, in der weggelassene Farben als Karomuster
  * durchscheinen; rechts die Garnliste mit Schaltern.
  *
- * Der Knopf „Anzahl Farben“ bedeutet auf den beiden Wegen etwas
- * Verschiedenes, auch wenn er gleich aussieht: Beim Pixelbild bestimmt er,
- * in wie viele Farben das Bild zerlegt wird; bei einer Zeichnung stehen
- * die Farben schon fest, und er legt die ähnlichsten zusammen. Mehr Garne,
- * als die Datei Farben hat, kann es dort nicht geben.
+ * „Anzahl Farben“ bedeutet auf den beiden Wegen etwas Verschiedenes, auch
+ * wenn der Knopf gleich aussieht: Beim Pixelbild bestimmt er, in wie viele
+ * Farben das Bild zerlegt wird; bei einer Zeichnung stehen die Farben
+ * schon fest, und er legt die ähnlichsten zusammen. Mehr Farben, als die
+ * Datei hat, kann es dort nicht geben — darum ist „+“ dann gesperrt.
  */
 import { Weiter, Weniger, Pipette, Hinzufuegen, Tipp } from '../Icons.tsx';
 import { StitchPreview } from '../StitchPreview.tsx';
@@ -59,7 +59,7 @@ export function ColorsScreen({ design, onAdjust, onNext }: Props) {
         <div className="side">
           <div className="card" style={{ flex: 1, minHeight: 0 }}>
             <div className="row between">
-              <h2>{vector ? 'Garne' : 'Anzahl Farben'}</h2>
+              <h2>Anzahl Farben</h2>
               <div className="stepper compact">
                 <button
                   type="button"
@@ -128,8 +128,9 @@ export function ColorsScreen({ design, onAdjust, onNext }: Props) {
             </p>
             {vector && design.colorCount < design.maxColorCount && (
               <p className="muted">
-                Zusammengelegt werden immer die beiden ähnlichsten Farben. Mit <strong>+</strong>{' '}
-                bekommt jede Farbe der Zeichnung wieder ihr eigenes Garn.
+                Zusammengelegt werden immer die beiden ähnlichsten Farben — eine ausgeschaltete
+                bleibt dabei für sich. Mit <strong>+</strong> bekommt jede Farbe der Zeichnung
+                wieder ihr eigenes Garn.
               </p>
             )}
           </div>

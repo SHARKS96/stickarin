@@ -46,6 +46,8 @@ export interface ComputeOptions {
    */
   colors: {
     index: number;
+    /** Die in der Vorlage erkannte Farbe — nicht das gewählte Garn. */
+    rgb: Rgb;
     name: string;
     catalog: string;
     ignored: boolean;

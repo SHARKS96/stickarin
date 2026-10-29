@@ -175,6 +175,10 @@ function fromVector(doc: VectorDocument, options: ComputeOptions): Found {
   const plan = planVector(doc, {
     widthMm: options.widthMm,
     colorCount: options.colorCount,
+    // Weggelassene Farben bleiben beim Zusammenlegen unter sich. Welche
+    // das sind, weiß nur die Oberfläche; sie schickt es als Farbe mit,
+    // denn Palettenstellen gibt es erst nach dem Bündeln.
+    ignored: options.colors.filter((c) => c.ignored).map((c) => c.rgb),
   });
   return {
     palette: plan.palette,

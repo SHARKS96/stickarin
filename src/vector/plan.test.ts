@@ -61,6 +61,51 @@ describe('planVector', () => {
     expect(zwei.areas.filter((a) => a.colorIndex !== blau)).toHaveLength(2);
   });
 
+  it('legt eine weggelassene Farbe nicht mit einer gestickten zusammen', () => {
+    // Weiß ist der Hintergrund und ausgeschaltet; am ähnlichsten ist ihm
+    // das helle Grau. Würden die beiden zusammengelegt, verschwände das
+    // Grau mit dem Hintergrund — oder der Hintergrund würde mitgestickt.
+    const doc = svg(
+      '<rect width="100" height="100" fill="#ffffff"/>' +
+        '<rect x="10" y="10" width="30" height="30" fill="#d0d0d0"/>' +
+        '<rect x="50" y="10" width="30" height="30" fill="#0000ff"/>',
+    );
+    // Die drei Flächen in der Reihenfolge der Zeichnung: Weiß, Grau, Blau.
+    const garne = (plan: ReturnType<typeof planVector>) => plan.areas.map((a) => a.colorIndex);
+
+    // Ohne Rücksicht landet das Grau beim Hintergrund — und würde mit ihm
+    // weggelassen.
+    const [weiss, grau, blau] = garne(planVector(doc, { widthMm: 100, colorCount: 2 }));
+    expect(grau).toBe(weiss);
+    expect(blau).not.toBe(weiss);
+
+    // Mit Rücksicht bleibt der Hintergrund für sich, und das Grau legt
+    // sich zum Blau.
+    const getrennt = planVector(doc, {
+      widthMm: 100,
+      colorCount: 2,
+      ignored: [{ r: 255, g: 255, b: 255 }],
+    });
+    const [weiss2, grau2, blau2] = garne(getrennt);
+    expect(getrennt.palette).toHaveLength(2);
+    expect(grau2).toBe(blau2);
+    expect(grau2).not.toBe(weiss2);
+  });
+
+  it('hört auf zusammenzulegen, wenn nur noch Verbotenes übrig ist', () => {
+    const doc = svg(
+      '<rect width="100" height="100" fill="#ffffff"/>' +
+        '<rect x="10" y="10" width="30" height="30" fill="#0000ff"/>',
+    );
+    const plan = planVector(doc, {
+      widthMm: 100,
+      colorCount: 1,
+      ignored: [{ r: 255, g: 255, b: 255 }],
+    });
+    // Ein Garn wäre gewünscht, aber die beiden dürfen nicht zusammen.
+    expect(plan.palette).toHaveLength(2);
+  });
+
   it('zählt die bestickte Fläche je Garn in mm²', () => {
     const doc = svg(
       '<rect width="50" height="50" fill="#ff0000"/>' +

@@ -1,8 +1,8 @@
 # Stickarin
 
-Bild auswählen, Farben festlegen, fertige Stickdatei für die **Bernina B 590**
-speichern. Läuft vollständig im Browser des iPads — kein Server, keine
-Installation, kein Upload.
+Bild oder Zeichnung auswählen, Farben festlegen, fertige Stickdatei für die
+**Bernina B 590** speichern. Läuft vollständig im Browser des iPads — kein
+Server, keine Installation, kein Upload.
 
 > Grundsatz: Das Ergebnis muss **ohne** jede Einstellung direkt stickbar sein
 > und ein dichtes, deckendes Stickbild ergeben. Alles Weitere liegt hinter
@@ -35,6 +35,10 @@ ohne Adressleiste.
 
 Fünf Schritte, dazu zwei Abzweige, die nur auf Wunsch erscheinen:
 
+Als Vorlage geht beides: ein Pixelbild (JPG, PNG, Foto) oder eine Zeichnung
+(SVG). Was es ist, erkennt die App an der Datei; der Weg durch die App ist
+derselbe.
+
 ```
 Start ─► 1 Bild ─► 2 Größe ─► 3 Farben ─► 4 Vorschau ─► 5 Speichern
                                   │             │
@@ -60,10 +64,19 @@ src/
 │   ├── format/            EXP-, INF- und BMP-Writer
 │   ├── pipeline.ts        Flächen → Stichplan, Reihenfolge, Sprünge
 │   └── export.ts          Das Dateitrio für den USB-Stick
-├── image/                 Bild → Farbflächen
+├── image/                 Pixelbild → Farbflächen
 │   ├── color.ts           Lab-Farbabstand
 │   ├── quantize.ts        Farbreduktion (k-Means++ im Lab-Raum)
 │   └── trace.ts           Masken → Polygone mit Löchern
+├── vector/                SVG → Farbflächen und Striche
+│   ├── xml.ts             Kleiner XML-Leser (im Worker gibt es kein DOM)
+│   ├── transform.ts       Affine Abbildungen
+│   ├── path.ts            Pfaddaten, Kurven und Bögen zu Polygonzügen
+│   ├── paint.ts           Farbe und Stil: Attribute, style, Stylesheet
+│   ├── shapes.ts          Füllregeln: Loch oder Insel?
+│   ├── svg.ts             Der Durchlauf durch den Baum
+│   ├── plan.ts            Millimeter und Garne
+│   └── preview.ts         Die gelesene Zeichnung als SVG
 ├── worker/                Rechnerei im eigenen Thread
 ├── state/                 Zustand, Worker-Anbindung, Speicher
 ├── ui/                    Schirme, Icons, Logo, Vorschau
@@ -73,7 +86,8 @@ assets/                    Quelldateien der Marke (SVG)
 scripts/generate-icons.mjs assets/icons/*.svg → src/ui/Icons.tsx
 ```
 
-`core/` und `image/` kennen kein DOM und sind damit einzeln testbar. Die
+`core/`, `image/` und `vector/` kennen kein DOM und sind damit einzeln
+testbar. Die
 Rechnerei läuft im Worker, damit die Regler auf dem iPad flüssig bleiben;
 der Stichplan geht als typisierte Felder über die Grenze und wird
 übertragen statt kopiert.
@@ -87,9 +101,45 @@ der Stichplan geht als typisierte Felder über die Grenze und wird
   die BMP-Vorschau trifft deren Maße und Dateigrößen exakt.
 - Konturen mit Löchern und konkaven Formen, nicht mehr nur konvexe Hüllen.
 - Farbreduktion mit Pipette, Toleranz und automatisch erkanntem Hintergrund.
+- Der Vektorweg: SVG mit Pfaden, Grundformen, Gruppen, Abbildungen,
+  Stylesheets, `use`/`symbol`, Füllregeln und Strichen.
 - Garnfarbe je Garn frei wählbar — nötig beim Negativ-Motiv, wo nach dem
   Weglassen des schwarzen Hintergrunds weiß auf weißem Stoff gestickt würde.
 - Fünf Schritte als PWA mit App-Icon, Galerie und Download der drei Dateien.
+
+## Der Vektorweg
+
+Ein Pixelbild zwingt zum Raten: Welche Farben sind gemeint, wo verläuft eine
+Kante, war diese dünne Spur eine Linie oder eine schmale Fläche? Eine
+Zeichnung beantwortet all das selbst. Stickarin nutzt das, statt sie zu
+rastern und die Antworten wieder wegzuwerfen.
+
+Was dabei anders läuft als beim Pixelbild:
+
+| | Pixelbild | Zeichnung (SVG) |
+| --- | --- | --- |
+| Farben | k-Means im Lab-Raum, Pipette, Toleranz | stehen in der Datei; der Regler legt die ähnlichsten zusammen, ausgeschaltete bleiben für sich |
+| Kanten | Pixeltreppe, geglättet | Kurven, so fein zerlegt, wie die Größe es verlangt |
+| Striche | gibt es nicht — alles ist Fläche | bleiben Pfade: Steppstich oder Satin |
+| Hintergrund | die Farbe, die den Bildrand beherrscht | die hinterste Fläche, die bis in alle vier Ecken reicht |
+
+Drei Entscheidungen, die man beim Lesen des Codes sonst sucht:
+
+- **Der viewBox wird nicht ausgewertet.** Er legt fest, wie eine Zeichnung in
+  ein Fenster passt; hier gibt es kein Fenster, sondern einen Stickrahmen.
+  Zugeschnitten wird auf das Motiv selbst — wer 8 cm einstellt, will ein 8 cm
+  breites Motiv und nicht 8 cm Rand mit einem Punkt in der Mitte.
+- **Transparenz wird gegen Weiß verrechnet.** Beim Sticken gibt es sie nicht;
+  Weiß ist im Zweifel die Farbe des unbestickten Stoffs. Was fast ganz
+  durchsichtig ist, fällt weg.
+- **Verläufe werden gemittelt.** Welche Farbe ein Verlauf „ist“, lässt sich
+  nicht besser beantworten. Wer es genauer will, teilt die Fläche im
+  Zeichenprogramm auf.
+
+Nicht gestickt wird Text: Schrift braucht die Schriftdatei selbst. Die App
+sagt es und bittet darum, den Text im Zeichenprogramm in Pfade umzuwandeln
+(„Text in Kurven“). Ebenso wenig eingebettete Pixelbilder und ein Beschnitt
+(`clip-path`) — beides wird gemeldet, sobald es wirklich etwas abschneidet.
 
 **Noch vereinfacht:**
 
@@ -101,6 +151,12 @@ der Stichplan geht als typisierte Felder über die Grenze und wird
   dadurch lückenhaft werden.
 - Die Stichqualität (Dichte, Unterlage, Zugausgleich) folgt dem
   dokumentierten Stand von TEST2, ist aber noch nicht gegengestickt.
+- Ein Beschnitt (`clip-path`) aus der Zeichnung wird nicht angewendet,
+  sondern nur gemeldet. Gestickt wird dann mehr, als in der Datei zu sehen
+  ist.
+- Sich überlappende Flächen werden beide voll gestickt. Was verdeckt ist,
+  liegt trotzdem Garn für Garn darunter — bei vielen Lagen wird das Motiv
+  dadurch dick.
 
 ## Maschine und Format
 
