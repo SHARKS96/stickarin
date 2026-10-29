@@ -56,6 +56,19 @@ export const SATIN_SPACING_MM = 0.4;
 /** Oberhalb dieser Breite neigt Satin zu losen Schlaufen -> Füllstich. */
 export const SATIN_MAX_WIDTH_MM = 10.0;
 
+/** Stichlänge des Steppstichs entlang eines Strichs. */
+export const RUN_STITCH_MM = 2.0;
+
+/**
+ * Ab dieser Strichbreite wird ein Strich als Satin gestickt, darunter als
+ * Steppstich.
+ *
+ * Darunter lohnt der Zickzack nicht: Ein Satinstich von unter einem
+ * Millimeter besteht fast nur aus Einstichlöchern, perforiert den Stoff und
+ * sieht nicht besser aus als eine Reihe Stiche auf der Linie.
+ */
+export const LINE_SATIN_MIN_WIDTH_MM = 1.0;
+
 /** Rahmen der Bernina B 590, in der Reihenfolge des Entwurfs. */
 export const HOOPS = [
   { id: 'klein', name: 'Klein', widthMm: 72, heightMm: 50 },
