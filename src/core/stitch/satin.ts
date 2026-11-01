@@ -23,6 +23,8 @@ import {
 } from '../constants.ts';
 import { normalizeShape, rotate } from '../geometry/polygon.ts';
 import type { Shape } from '../geometry/polygon.ts';
+import { traceSpine } from './spine.ts';
+import type { Rung } from './spine.ts';
 import { spanLanes } from './tatami.ts';
 import type { Span } from './tatami.ts';
 import { coveredArea, staysInside } from './travel.ts';
@@ -86,9 +88,20 @@ function meanSpan(shape: Shape, angle: number): number | null {
 export function satinArea(builder: StitchBuilder, raw: Shape, options: SatinOptions = {}): void {
   const { spacing = SATIN_SPACING_MM, pullCompensation = PULL_COMPENSATION_MM } = options;
   const shape = normalizeShape(raw);
-  const angle = options.angle ?? satinMetrics(shape).angle;
   const covered = coveredArea(shape);
 
+  // Der bessere Weg zuerst: Sprossen quer zur Mittellinie, deren Winkel mit
+  // der Form mitdreht. Nur wenn die Form dafür nicht taugt — verzweigt oder
+  // zu klein fürs Raster — bleibt der feste Winkel.
+  if (options.angle === undefined) {
+    const spine = traceSpine(shape, spacing);
+    if (spine) {
+      alongSpine(builder, covered, spine.path, spine.rungs, spacing, pullCompensation);
+      return;
+    }
+  }
+
+  const angle = options.angle ?? satinMetrics(shape).angle;
   const lanes = spanLanes(shape, { spacing, angle, pullCompensation });
   const back = (x: number, y: number) => rotate({ x, y }, angle);
 
@@ -127,6 +140,80 @@ export function satinArea(builder: StitchBuilder, raw: Shape, options: SatinOpti
     // Einstiche mitten in der Säule, und der Glanz wäre weg.
     go(builder, covered, top, SATIN_MAX_WIDTH_MM);
   }
+}
+
+/**
+ * Die drei Lagen entlang der Mittellinie: Mittellauf, Zickzack-Unterlage,
+ * Sprossen. Derselbe Aufbau wie beim festen Winkel — nur dass jede Sprosse
+ * ihre eigene Richtung hat.
+ */
+function alongSpine(
+  builder: StitchBuilder,
+  covered: Shape,
+  path: Point[],
+  rungs: Rung[],
+  spacing: number,
+  pullCompensation: number,
+): void {
+  // 1. Mittellauf: hält den Stoff und bringt die Nadel an den Anfang.
+  const mitte = everyNth(path, Math.max(1, Math.round(MAX_STITCH_MM / spacing)));
+
+  // 2. Zickzack-Unterlage, etwas innerhalb der Kante.
+  const schritt = Math.max(1, Math.round(Math.max(spacing * 4, 1.5) / spacing));
+  const unten = everyNth(rungs, schritt).map((r, i) => lerp(r, i % 2 === 0 ? 0.15 : 0.85));
+
+  // 3. Deckschicht. Ein Satinstich setzt **einen** Einstich je Sprosse,
+  //    abwechselnd links und rechts: Jeder Stich kreuzt die Säule und
+  //    rückt dabei um einen Abstand vor. Zwei Einstiche je Sprosse wären
+  //    die doppelte Dichte und ein Stich der Länge null dazwischen.
+  //
+  //    Der Zugausgleich ist ein Maß in Millimetern — auf der Sprosse also
+  //    ein Anteil ihrer Länge. Zu breite Sprossen zerlegt der Builder.
+  //    In einer engen Innenkurve laufen die Sprossen fächerförmig auf
+  //    dieselbe Stelle zu. Alle zu sticken hieße, zwanzigmal in dasselbe
+  //    Loch zu stechen — ein Garnnest. Darum je Seite einen Mindestabstand
+  //    halten und dazwischenliegende Sprossen auslassen; der Fächer wird
+  //    dadurch luftiger, die Außenkante bleibt dicht.
+  const oben: Point[] = [];
+  const zuletzt: (Point | null)[] = [null, null];
+  rungs.forEach((r, i) => {
+    const seite = i % 2;
+    const ueber = pullCompensation / len(r);
+    const p = lerp(r, seite === 0 ? -ueber : 1 + ueber);
+    const vorher = zuletzt[seite];
+    if (vorher && Math.hypot(p.x - vorher.x, p.y - vorher.y) < MIN_STITCH_MM) return;
+    zuletzt[seite] = p;
+    oben.push(p);
+  });
+
+  // Jede Lage dort beginnen, wo die vorige aufgehört hat. Sonst läuft der
+  // Faden zwischen den Lagen einmal die ganze Säule zurück.
+  for (const lage of [mitte, unten, oben]) {
+    go(builder, covered, nearestFirst(builder.current, lage), SATIN_MAX_WIDTH_MM);
+  }
+}
+
+/** Den Pfad so herum, dass sein Anfang näher an `here` liegt. */
+function nearestFirst(here: Point | null, path: Point[]): Point[] {
+  const first = path[0];
+  const last = path[path.length - 1];
+  if (!here || !first || !last) return path;
+  const d = (p: Point) => Math.hypot(p.x - here.x, p.y - here.y);
+  return d(last) < d(first) ? [...path].reverse() : path;
+}
+
+const len = (r: Rung) => Math.hypot(r.b.x - r.a.x, r.b.y - r.a.y) || 1;
+
+/** Punkt auf der Sprosse; `t` 0 = Anfang, 1 = Ende, außerhalb = verlängert. */
+function lerp(r: Rung, t: number): Point {
+  return { x: r.a.x + (r.b.x - r.a.x) * t, y: r.a.y + (r.b.y - r.a.y) * t };
+}
+
+function everyNth<T>(list: T[], n: number): T[] {
+  const out = list.filter((_, i) => i % n === 0);
+  const last = list[list.length - 1] as T;
+  if (out[out.length - 1] !== last) out.push(last);
+  return out;
 }
 
 /**

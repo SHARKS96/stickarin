@@ -1,41 +1,49 @@
 /**
  * Erzeugt eine Testdatei zum Probesticken.
  *
- * TEST4 ist ein kontrollierter Versuch, kein Dichtevergleich. Die Frage,
- * die er beantworten soll: TEST3 hatte dieselbe Dichte wie TEST2 (gemessen
- * ±3 %) und sah auf dem Stoff trotzdem schlechter aus. Woran liegt das?
+ * TEST5 prüft die beiden Punkte, die der Vergleich mit einer
+ * professionell digitalisierten Datei (Lady_10, 28 000 Stiche) offen
+ * gelassen hat.
  *
- * Dafür unterscheidet sich jedes Feld vom Standard in **genau einer**
- * Sache, und der Standard wird zweimal gestickt — am Anfang und am Ende.
- * Die Differenz zwischen Feld 1 und Feld 6 ist der Fehler des Versuchs
- * selbst: Stoffspannung, Vlies und Fadenspannung ändern sich über eine
- * Stickung hinweg, und ohne dieses Maß lässt sich kein anderer
- * Unterschied einordnen.
+ * **Garnmenge.** Im Inneren einer Fläche liegen dort 5,50 mm Garn je mm²,
+ * bei uns waren es 3,00. Die Satindichte ist dabei dieselbe (0,42 gegen
+ * 0,40 mm) — der Unterschied steckt allein in der Zahl der Lagen. Die
+ * Felder 1 bis 3 fahren drei Stufen ab: alte Unterlage, neue Unterlage,
+ * neue Unterlage plus Zusatzlagen.
  *
- *   1  Referenz A              4  ohne Unterlage
- *   2  ohne Abschlusskontur    5  dichter (0,33 mm)
- *   3  ohne Zugausgleich       6  Referenz B (wie 1, zuletzt)
+ * **Satin.** Die Sprossen folgen jetzt einer Mittellinie und drehen mit
+ * der Form mit. Feld 4 zeigt das an einer geraden, Feld 5 an einer
+ * gebogenen Säule — gerade sollte sauber sein, gebogen ist der Fall, für
+ * den der Umbau gemacht wurde.
+ *
+ * Wie bei TEST4 weicht jedes Feld in genau einer Sache ab, und der
+ * Standard steht zweimal darin: Feld 1 am Anfang, Feld 6 am Ende. Ihre
+ * Differenz auf dem Stoff ist der Fehler des Versuchs selbst.
  *
  * Aufruf: npx vite-node scripts/make-stitch-test.mts -- <Zielordner> [Name]
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DENSITY_LEVELS, PULL_COMPENSATION_MM } from '../src/core/constants.ts';
+import { DENSITY_LEVELS, UNDERLAY_SPACING_MM } from '../src/core/constants.ts';
 import { exportDesign } from '../src/core/export.ts';
+import { normalizeShape, shapeBounds } from '../src/core/geometry/polygon.ts';
 import type { Shape } from '../src/core/geometry/polygon.ts';
-import { shapeBounds } from '../src/core/geometry/polygon.ts';
 import { StitchBuilder } from '../src/core/stitch/builder.ts';
 import { fillArea } from '../src/core/stitch/fill.ts';
 import type { FillOptions } from '../src/core/stitch/fill.ts';
+import { satinArea } from '../src/core/stitch/satin.ts';
 import { planStats } from '../src/core/types.ts';
 import type { Point, StitchPlan } from '../src/core/types.ts';
 
 const FIELD_MM = 12;
 const GAP_MM = 3;
+const NORMAL = (DENSITY_LEVELS.find((l) => l.label === 'Normal') ?? DENSITY_LEVELS[2]).spacingMm;
 
-/** Quadrat an der Position `index`, von links. */
-function field(index: number): Shape {
-  const x = index * (FIELD_MM + GAP_MM);
+/** Linke Kante des Feldes `index`. */
+const left = (index: number) => index * (FIELD_MM + GAP_MM);
+
+function square(index: number): Shape {
+  const x = left(index);
   return {
     outer: [
       { x, y: 0 },
@@ -47,50 +55,72 @@ function field(index: number): Shape {
   };
 }
 
-const spacingOf = (label: string) =>
-  (DENSITY_LEVELS.find((l) => l.label === label) ?? DENSITY_LEVELS[2]).spacingMm;
+/** Gerade Säule, mittig im Feld. */
+function column(index: number, widthMm: number): Shape {
+  const x = left(index) + (FIELD_MM - widthMm) / 2;
+  return {
+    outer: [
+      { x, y: 0 },
+      { x: x + widthMm, y: 0 },
+      { x: x + widthMm, y: FIELD_MM },
+      { x, y: FIELD_MM },
+    ],
+    holes: [],
+  };
+}
 
-const NORMAL = spacingOf('Normal');
-const DICHT = spacingOf('Dicht');
+/** Viertelkreis fester Breite — die Form, für die der Satin umgebaut wurde. */
+function arc(index: number, widthMm: number): Shape {
+  const r = 7;
+  const cx = left(index) + 1;
+  const outer: Point[] = [];
+  const inner: Point[] = [];
+  for (let i = 0; i <= 48; i++) {
+    const t = (i / 48) * (Math.PI / 2);
+    outer.push({ x: cx + Math.cos(t) * (r + widthMm / 2), y: Math.sin(t) * (r + widthMm / 2) });
+    inner.push({ x: cx + Math.cos(t) * (r - widthMm / 2), y: Math.sin(t) * (r - widthMm / 2) });
+  }
+  return normalizeShape({ outer: [...outer, ...inner.reverse()], holes: [] });
+}
 
-/** Der Standard, von dem jedes andere Feld um genau eine Sache abweicht. */
-const STANDARD: FillOptions = {
-  spacing: NORMAL,
-  angle: 0,
-  raisedLayers: 0,
-  underlay: true,
-  closingContour: true,
-  pullCompensation: PULL_COMPENSATION_MM,
-};
+type Feld = { shape: Shape; was: string; prueft: string; fill?: FillOptions; satin?: true };
 
-const fields: { options: FillOptions; was: string; prueft: string }[] = [
+const STANDARD: FillOptions = { spacing: NORMAL, angle: 0, raisedLayers: 0 };
+
+const fields: Feld[] = [
   {
-    options: STANDARD,
-    was: `Referenz A — Standard (${NORMAL} mm)`,
+    shape: square(0),
+    fill: STANDARD,
+    was: `Referenz A — neuer Standard (Unterlage ${UNDERLAY_SPACING_MM} mm)`,
     prueft: 'der Vergleichspunkt für alles Übrige',
   },
   {
-    options: { ...STANDARD, closingContour: false },
-    was: 'ohne Abschlusskontur',
-    prueft: 'ob die Kontur den Rand beruhigt oder die Fläche stört',
+    shape: square(1),
+    fill: { ...STANDARD, underlaySpacing: 2.0 },
+    was: 'Unterlage 2,0 mm — der bisherige Wert',
+    prueft: 'was die dichtere Unterlage überhaupt bringt',
   },
   {
-    options: { ...STANDARD, pullCompensation: 0 },
-    was: 'ohne Zugausgleich (0 mm statt 0,2 mm)',
-    prueft: 'ob die um 0,2 mm verlängerten Reihen die Kante öffnen',
+    shape: square(2),
+    fill: { ...STANDARD, raisedLayers: 2 },
+    was: 'Unterlage 1,0 mm + zwei Zusatzlagen',
+    prueft: 'die Garnmenge der Referenz (rechnerisch ~5 mm/mm²)',
   },
   {
-    options: { ...STANDARD, underlay: false },
-    was: 'ohne Unterlage (nur Deckschicht)',
-    prueft: 'wie viel die Unterlage zur Deckung beiträgt',
+    shape: column(3, 4),
+    satin: true,
+    was: 'Satin, gerade Säule 4 mm',
+    prueft: 'der einfache Fall — muss sauber sein',
   },
   {
-    options: { ...STANDARD, spacing: DICHT },
-    was: `dichter (${DICHT} mm statt ${NORMAL} mm)`,
-    prueft: 'ob mehr Dichte den Eindruck überhaupt ändert',
+    shape: arc(4, 4),
+    satin: true,
+    was: 'Satin, gebogene Säule 4 mm',
+    prueft: 'die Sprossen drehen mit der Form mit',
   },
   {
-    options: STANDARD,
+    shape: square(5),
+    fill: STANDARD,
     was: 'Referenz B — wie Feld 1, zuletzt gestickt',
     prueft: 'der Fehler des Versuchs: Drift über die Stickung hinweg',
   },
@@ -103,13 +133,13 @@ function centroid(shape: Shape): Point {
 }
 
 const builder = new StitchBuilder();
-fields.forEach((f, i) => {
-  const shape = field(i);
-  // Zwischen den Feldern liegen 3 mm Stoff: springen und schneiden, genau
-  // wie der Stichplan es bei weit auseinanderliegenden Flächen macht.
-  builder.moveTo(centroid(shape));
-  fillArea(builder, shape, f.options);
-});
+for (const f of fields) {
+  // Zwischen den Feldern liegt Stoff: springen und schneiden, genau wie
+  // der Stichplan es bei weit auseinanderliegenden Flächen macht.
+  builder.moveTo(centroid(f.shape));
+  if (f.satin) satinArea(builder, f.shape);
+  else fillArea(builder, f.shape, f.fill);
+}
 
 const plan: StitchPlan = {
   entries: builder.finish(),
@@ -118,7 +148,7 @@ const plan: StitchPlan = {
 
 const outDir = process.argv[2];
 if (!outDir) throw new Error('Zielordner fehlt.');
-const name = process.argv[3] ?? 'TEST4';
+const name = process.argv[3] ?? 'TEST5';
 mkdirSync(outDir, { recursive: true });
 
 for (const file of exportDesign(plan, name)) {

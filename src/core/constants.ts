@@ -45,7 +45,7 @@ export const TIE_STITCH_MM = 0.4;
 export const FILL_EDGE_INSET_MM = 0.5;
 
 /** Lockere Querunterlage unter der Füllfläche. */
-export const UNDERLAY_SPACING_MM = 2.0;
+export const UNDERLAY_SPACING_MM = 1.0;
 
 /** 3D-Effekt: zusätzliche Unterlagelagen, enger und abwechselnd gedreht. */
 export const RAISED_UNDERLAY_SPACING_MM = 1.0;

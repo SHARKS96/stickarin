@@ -144,14 +144,18 @@ sagt es und bittet darum, den Text im Zeichenprogramm in Pfade umzuwandeln
 
 **Noch vereinfacht:**
 
-- Die Satinrichtung wird aus zwölf Probeschnitten gewählt, nicht aus einer
-  echten Mittelachse. Bei einer Form, die in verschiedenen Teilen
-  verschieden läuft, gilt eine Richtung für das Ganze.
+- Die Satin-Mittellinie kommt aus einem Raster und rückt in die Mitte
+  nach; eine echte Mittelachse ist sie nicht. An engen Innenkurven und an
+  den Enden einer Säule bleibt der Stichverlauf unruhig. Verzweigte Formen
+  erkennt sie nicht als solche, sondern fällt auf einen festen Winkel
+  für die ganze Fläche zurück.
 - Der Polygonversatz löst Selbstschnitte nicht auf, sondern wirft
   umgestülpte Ecken weg. Bei stark verwinkelten Formen kann der Kantenlauf
   dadurch lückenhaft werden.
-- Die Stichqualität (Dichte, Unterlage, Zugausgleich) folgt dem
-  dokumentierten Stand von TEST2, ist aber noch nicht gegengestickt.
+- Die Garnmenge liegt bei 3,5 mm je mm²; eine professionell
+  digitalisierte Vergleichsdatei kommt auf 5,5. Die Satindichte stimmt
+  dagegen überein (0,40 gegen 0,42 mm) — es fehlen Lagen, nicht Dichte.
+  Welcher Wert richtig ist, muss die Maschine sagen (TEST5).
 - Ein Beschnitt (`clip-path`) aus der Zeichnung wird nicht angewendet,
   sondern nur gemeldet. Gestickt wird dann mehr, als in der Datei zu sehen
   ist.

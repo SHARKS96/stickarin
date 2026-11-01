@@ -8,6 +8,7 @@
 import {
   FILL_EDGE_INSET_MM,
   FILL_SPACING_MM,
+  MIN_STITCH_MM,
   PULL_COMPENSATION_MM,
   RAISED_UNDERLAY_SPACING_MM,
   UNDERLAY_SPACING_MM,
@@ -38,6 +39,8 @@ export interface FillOptions {
 
   /** Kantenlauf und Querunterlage; aus = nur die Deckschicht. */
   underlay?: boolean;
+  /** Reihenabstand der Querunterlage; kleiner = mehr Garn darunter. */
+  underlaySpacing?: number;
   /** Die Kontur, die zuletzt außen herumläuft. */
   closingContour?: boolean;
   /** Wie weit jede Reihe über die Sollkante hinausläuft. */
@@ -54,6 +57,7 @@ export function fillArea(builder: StitchBuilder, raw: Shape, options: FillOption
     angle = 0,
     raisedLayers = 0,
     underlay = true,
+    underlaySpacing = UNDERLAY_SPACING_MM,
     closingContour = true,
     pullCompensation = PULL_COMPENSATION_MM,
   } = options;
@@ -73,7 +77,7 @@ export function fillArea(builder: StitchBuilder, raw: Shape, options: FillOption
   // 2. Lockere Querunterlage, quer zur Deckschicht.
   if (underlay) {
     runRows(builder, inner, {
-      spacing: UNDERLAY_SPACING_MM,
+      spacing: underlaySpacing,
       angle: angle + Math.PI / 2,
       pullCompensation,
     });
@@ -117,8 +121,9 @@ function runRows(
   options: { spacing: number; angle: number; pullCompensation: number },
 ): void {
   const covered = coveredArea(shape, options.pullCompensation);
+  const rows = nearEndFirst(builder.current, tatamiRows(shape, options));
 
-  for (const row of tatamiRows(shape, options)) {
+  for (const row of rows) {
     const first = row[0];
     if (!first) continue;
     const here = builder.current;
@@ -126,9 +131,51 @@ function runRows(
     // Der Weg zur nächsten Teilstrecke darf nur durchgestickt werden, wenn
     // er im Material bleibt. Sonst liefe der Faden quer durch ein Loch oder
     // über die Einbuchtung einer U-Form — sichtbar und falsch.
-    if (here && !staysInside(covered, here, first)) builder.moveTo(first);
-    else builder.travelTo(first);
+    if (here && !staysInside(covered, here, first)) {
+      builder.moveTo(first);
+      for (const p of row) builder.stitchTo(p as Point);
+      continue;
+    }
 
+    // Am Reihenende steht die Nadel schon fast auf dem Anfang der nächsten
+    // Reihe — einen Reihenabstand daneben. Diesen Weg als eigenen Stich zu
+    // schreiben erzeugt bei jedem Reihenwechsel einen Stich von 0,4 mm,
+    // quer zur Naht. In unseren Dateien war so jeder fünfte Stich kürzer
+    // als 0,5 mm; in der professionell digitalisierten Referenz ist es
+    // jeder fünfhundertste. Zu viele Einstiche auf derselben Stelle häufen
+    // Garn an, reißen den Faden und machen die Fläche unruhig.
+    //
+    // Also nicht hinsetzen und umknicken, sondern **umkehren**: Der erste
+    // Punkt der Reihe fällt weg, der Versatz steckt im nächsten langen
+    // Stich. Die Kante bekommt dadurch je Seite einen Einstich alle zwei
+    // Reihen statt zwei dicht nebeneinander — so sieht es die Referenz
+    // auch.
+    if (dist(here, first) < MIN_STITCH_MM && row.length > 2) {
+      // Nicht erst hinfahren — der Versatz steckt im nächsten Stich.
+      for (const p of row.slice(1)) builder.stitchTo(p as Point);
+      continue;
+    }
+
+    builder.travelTo(first);
     for (const p of row) builder.stitchTo(p as Point);
   }
+}
+
+function dist(a: Point | null, b: Point): number {
+  return a ? Math.hypot(b.x - a.x, b.y - a.y) : Infinity;
+}
+
+/**
+ * Die Reihen so herum, dass die erste dort liegt, wo die Nadel steht.
+ *
+ * Sonst beginnt jede Lage wieder am selben Rand, und zwischen den Lagen
+ * läuft der Faden einmal quer über die ganze Fläche — zu weit, um ihn
+ * durchzusticken, also ein Sprung mit Schnitt.
+ */
+function nearEndFirst(here: Point | null, rows: Point[][]): Point[][] {
+  if (!here || rows.length < 2) return rows;
+  const first = rows[0]?.[0];
+  const last = rows[rows.length - 1]?.[0];
+  if (!first || !last) return rows;
+  return dist(here, last) < dist(here, first) ? [...rows].reverse() : rows;
 }
