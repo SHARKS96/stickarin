@@ -37,8 +37,8 @@ export function outsetBy(shape: Shape, d: number): Shape {
  * Zugausgleich und etwas Spielraum. Gegen die Sollkante geprüft würde
  * jeder Reihenwechsel als Austritt gelten.
  */
-export function coveredArea(shape: Shape): Shape {
-  return outsetBy(shape, PULL_COMPENSATION_MM + TRAVEL_TOLERANCE_MM);
+export function coveredArea(shape: Shape, pullCompensation = PULL_COMPENSATION_MM): Shape {
+  return outsetBy(shape, pullCompensation + TRAVEL_TOLERANCE_MM);
 }
 
 /** Liegt die ganze Strecke von `a` nach `b` innerhalb der Fläche? */
