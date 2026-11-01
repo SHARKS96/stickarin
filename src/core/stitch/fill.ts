@@ -92,24 +92,36 @@ export function fillArea(builder: StitchBuilder, raw: Shape, options: FillOption
     });
   }
 
-  // 4. Deckschicht auf der **vollen** Fläche, nicht auf der versetzten.
-  //    Sonst endet die Füllung einen halben Millimeter vor der Kante.
-  runRows(builder, shape, { spacing, angle, pullCompensation });
+  // 4. Deckschicht — und zwar auf **genau der Fläche, auf der auch die
+  //    Kontur läuft**. Das ist der Punkt, an dem TEST3 danebenlag:
+  //
+  //    Die Reihen bekamen ihren Zugausgleich in Reihenrichtung, die Kontur
+  //    ihren ringsum. In Reihenrichtung trafen sich beide also genau; quer
+  //    dazu nicht, denn dort sitzt die äußerste Reihe einen halben
+  //    Reihenabstand innerhalb der Kante. Gemessen an TEST3: Kontur bei
+  //    y = −0,2 und 12,2, äußerste Füllreihe bei 0,2 und 11,8 — oben und
+  //    unten 0,4 mm Luft, links und rechts keine. Eine Kontur, die auf
+  //    zwei Seiten bündig sitzt und auf zwei Seiten absteht, liest sich
+  //    als abgesetzter Rahmen. Deshalb sah TEST2 ohne Kontur sauberer aus
+  //    als TEST3 mit.
+  //
+  //    Jetzt laufen beide auf derselben Kante: die Reihen über die um den
+  //    Zugausgleich vergrößerte Fläche, ohne noch einmal zu verlängern.
+  const rim = outsetBy(shape, pullCompensation);
+  runRows(builder, rim, { spacing, angle, pullCompensation: 0 });
 
-  // 5. Abschlusskontur ganz außen.
+  // 5. Abschlusskontur auf derselben Kante.
   //
   //    Ohne sie bilden die Umkehrpunkte der Füllreihen den sichtbaren Rand:
   //    Jede Reihe endet für sich, nichts hält die Enden auf einer Linie, und
   //    der Rand wird weich und ausgefranst. Genau das zeigt TEST2.
   //
-  //    Sie läuft auf der **Außenkante der Füllung**, also um den
-  //    Zugausgleich weiter draußen als die Sollkante. Liefe sie auf der
-  //    Sollkante, blieben die um 0,2 mm verlängerten Reihenenden davor
-  //    stehen und der Kamm wäre weiter zu sehen. Der Kantenlauf aus
-  //    Schritt 1 hilft ohnehin nicht — er liegt einen halben Millimeter
-  //    weiter innen und unter der Deckschicht.
+  //    Die professionell digitalisierte Referenz kennt eine solche Kontur
+  //    übrigens nicht: Von 158 langen Läufen darin kehrt genau einer zum
+  //    Anfang zurück. Sie braucht keine, weil sie schmale Formen als Satin
+  //    stickt — dessen Einstiche liegen auf der Kante. Für eine Füllung
+  //    quer zur Reihenrichtung gilt das nicht.
   if (closingContour) {
-    const rim = outsetBy(shape, pullCompensation);
     builder.runLoop(rim.outer);
     for (const hole of rim.holes) builder.runLoop(hole);
   }
@@ -166,16 +178,37 @@ function dist(a: Point | null, b: Point): number {
 }
 
 /**
- * Die Reihen so herum, dass die erste dort liegt, wo die Nadel steht.
+ * Die Reihen so herum, dass die erste dort anfängt, wo die Nadel steht.
  *
- * Sonst beginnt jede Lage wieder am selben Rand, und zwischen den Lagen
- * läuft der Faden einmal quer über die ganze Fläche — zu weit, um ihn
+ * Zwei Freiheiten gibt es dabei: welche Reihe zuerst kommt, und von
+ * welchem Ende aus sie gestickt wird. Beide werden genutzt. Sonst beginnt
+ * jede Lage wieder an derselben Ecke, und zwischen den Lagen läuft der
+ * Faden einmal quer über die ganze Fläche — zu weit, um ihn
  * durchzusticken, also ein Sprung mit Schnitt.
+ *
+ * Die Reihen wechseln die Richtung ohnehin ab; alle zu spiegeln erhält
+ * diesen Wechsel.
  */
 function nearEndFirst(here: Point | null, rows: Point[][]): Point[][] {
-  if (!here || rows.length < 2) return rows;
-  const first = rows[0]?.[0];
-  const last = rows[rows.length - 1]?.[0];
-  if (!first || !last) return rows;
-  return dist(here, last) < dist(here, first) ? [...rows].reverse() : rows;
+  if (!here || rows.length === 0) return rows;
+
+  const ecke = (reihen: Point[][], hinten: boolean, umgedreht: boolean): Point | undefined => {
+    const reihe = reihen[hinten ? reihen.length - 1 : 0];
+    return reihe?.[umgedreht ? reihe.length - 1 : 0];
+  };
+
+  let beste: Point[][] = rows;
+  let bestD = Infinity;
+  for (const hinten of [false, true]) {
+    for (const umgedreht of [false, true]) {
+      const p = ecke(rows, hinten, umgedreht);
+      if (!p) continue;
+      const d = dist(here, p);
+      if (d >= bestD) continue;
+      bestD = d;
+      const geordnet = hinten ? [...rows].reverse() : rows;
+      beste = umgedreht ? geordnet.map((r) => [...r].reverse()) : geordnet;
+    }
+  }
+  return beste;
 }

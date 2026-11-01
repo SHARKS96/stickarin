@@ -89,6 +89,44 @@ describe('Abschlusskontur', () => {
   });
 });
 
+describe('Kontur und Füllung treffen sich', () => {
+  /**
+   * Der Befund aus TEST3: Die Kontur hatte einen sichtbaren Abstand zur
+   * Fläche, und das Stickbild sah deshalb schlechter aus als TEST2 ganz
+   * ohne Kontur.
+   *
+   * Die Ursache war eine Unwucht. Die Reihen bekamen ihren Zugausgleich
+   * in Reihenrichtung, die Kontur ihren ringsum: In Reihenrichtung trafen
+   * sich beide genau, quer dazu klaffte ein halber Reihenabstand plus
+   * Zugausgleich. Gemessen an TEST3: Kontur bei y = −0,2 und 12,2,
+   * äußerste Füllreihe bei 0,2 und 11,8.
+   */
+  it('lässt quer zu den Reihen keine Lücke', () => {
+    const spacing = 0.4;
+    const builder = new StitchBuilder();
+    builder.moveTo(square.outer[0] as Point);
+    fillArea(builder, square, { spacing });
+    const stitches = builder.finish().filter((e) => e.kind === 'stitch');
+
+    const ys = stitches.map((e) => e.y).sort((a, b) => a - b);
+    const unten = ys[0] as number;
+    // Die Kontur liegt ganz außen. Die äußerste Füllreihe darf höchstens
+    // einen Reihenabstand darüber liegen, sonst steht die Kontur ab.
+    const naechste = ys.find((y) => y > unten + 1e-6) as number;
+    expect(naechste - unten).toBeLessThanOrEqual(spacing + 1e-6);
+  });
+
+  it('trifft sich in Reihenrichtung genauso', () => {
+    const builder = new StitchBuilder();
+    builder.moveTo(square.outer[0] as Point);
+    fillArea(builder, square, { spacing: 0.4 });
+    const stitches = builder.finish().filter((e) => e.kind === 'stitch');
+    const xs = stitches.map((e) => e.x).sort((a, b) => a - b);
+    // Reihenenden und Kontur liegen auf derselben Kante — kein Versatz.
+    expect(xs[0] as number).toBeCloseTo(-PULL_COMPENSATION_MM, 6);
+  });
+});
+
 describe('Deckschicht', () => {
   it('reicht bis an die Kante, nicht nur bis zum Kantenlauf', () => {
     // Früher lief die Deckschicht auf der um 0,5 mm versetzten Fläche und
