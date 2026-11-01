@@ -11,13 +11,19 @@
  * Felder 1 bis 3 fahren drei Stufen ab: alte Unterlage, neue Unterlage,
  * neue Unterlage plus Zusatzlagen.
  *
+ * **Abschlusskontur.** In TEST3 stand sie sichtbar von der Fläche ab und
+ * machte das Stickbild schlechter als TEST2 ganz ohne sie. Sie sitzt
+ * jetzt bündig. Feld 4 lässt sie weg und zeigt damit, ob sie überhaupt
+ * noch etwas beiträgt — die professionell digitalisierte Referenz kommt
+ * ohne aus.
+ *
  * **Satin.** Die Sprossen folgen jetzt einer Mittellinie und drehen mit
- * der Form mit. Feld 4 zeigt das an einer geraden, Feld 5 an einer
+ * der Form mit. Feld 5 zeigt das an einer geraden, Feld 6 an einer
  * gebogenen Säule — gerade sollte sauber sein, gebogen ist der Fall, für
  * den der Umbau gemacht wurde.
  *
- * Wie bei TEST4 weicht jedes Feld in genau einer Sache ab, und der
- * Standard steht zweimal darin: Feld 1 am Anfang, Feld 6 am Ende. Ihre
+ * Jedes Feld weicht vom Standard in genau einer Sache ab, und der
+ * Standard steht zweimal darin: Feld 1 am Anfang, Feld 7 am Ende. Ihre
  * Differenz auf dem Stoff ist der Fehler des Versuchs selbst.
  *
  * Aufruf: npx vite-node scripts/make-stitch-test.mts -- <Zielordner> [Name]
@@ -36,7 +42,7 @@ import { planStats } from '../src/core/types.ts';
 import type { Point, StitchPlan } from '../src/core/types.ts';
 
 const FIELD_MM = 12;
-const GAP_MM = 3;
+const GAP_MM = 2;
 const NORMAL = (DENSITY_LEVELS.find((l) => l.label === 'Normal') ?? DENSITY_LEVELS[2]).spacingMm;
 
 /** Linke Kante des Feldes `index`. */
@@ -107,19 +113,25 @@ const fields: Feld[] = [
     prueft: 'die Garnmenge der Referenz (rechnerisch ~5 mm/mm²)',
   },
   {
-    shape: column(3, 4),
+    shape: square(3),
+    fill: { ...STANDARD, closingContour: false },
+    was: 'ohne Abschlusskontur',
+    prueft: 'ob die Kontur überhaupt noch etwas beiträgt',
+  },
+  {
+    shape: column(4, 4),
     satin: true,
     was: 'Satin, gerade Säule 4 mm',
     prueft: 'der einfache Fall — muss sauber sein',
   },
   {
-    shape: arc(4, 4),
+    shape: arc(5, 4),
     satin: true,
     was: 'Satin, gebogene Säule 4 mm',
     prueft: 'die Sprossen drehen mit der Form mit',
   },
   {
-    shape: square(5),
+    shape: square(6),
     fill: STANDARD,
     was: 'Referenz B — wie Feld 1, zuletzt gestickt',
     prueft: 'der Fehler des Versuchs: Drift über die Stickung hinweg',
