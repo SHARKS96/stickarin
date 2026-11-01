@@ -190,6 +190,63 @@ describe('Verriegelung', () => {
   });
 });
 
+describe('Reihenwechsel', () => {
+  /**
+   * Am Reihenende steht die Nadel einen Reihenabstand neben dem Anfang der
+   * nächsten Reihe. Diesen Weg als eigenen Stich zu schreiben erzeugte bei
+   * jedem Reihenwechsel einen Stich von 0,4 mm quer zur Naht: In TEST4 war
+   * so jeder fünfte Stich kürzer als 0,5 mm, in der professionell
+   * digitalisierten Referenz ist es jeder fünfhundertste.
+   */
+  function stichlaengen(entries: PlanEntry[]): number[] {
+    const out: number[] = [];
+    for (let i = 1; i < entries.length; i++) {
+      const a = entries[i - 1] as PlanEntry;
+      const b = entries[i] as PlanEntry;
+      if (a.kind !== 'stitch' || b.kind !== 'stitch') continue;
+      const d = Math.hypot(b.x - a.x, b.y - a.y);
+      if (d > 1e-9) out.push(d);
+    }
+    return out;
+  }
+
+  it('setzt dafür keinen eigenen Kurzstich', () => {
+    const builder = new StitchBuilder();
+    builder.moveTo(square.outer[0] as Point);
+    fillArea(builder, square, { spacing: 0.4 });
+    const laengen = stichlaengen(builder.finish());
+    const kurz = laengen.filter((d) => d < 0.4 + 1e-6);
+
+    // Übrig bleiben nur die Verriegelungen — vier Records je Fadenstück.
+    // Ein Reihenwechsel je Reihe wären bei 12 mm und 0,4 mm Abstand allein
+    // dreißig Stück, dazu dieselbe Zahl noch einmal für die Unterlage.
+    expect(kurz.length).toBeLessThan(12);
+  });
+
+  it('kehrt um, statt rechtwinklig abzuknicken', () => {
+    const builder = new StitchBuilder();
+    builder.moveTo(square.outer[0] as Point);
+    fillArea(builder, square, { spacing: 0.4 });
+    const p = builder.finish().filter((e) => e.kind === 'stitch');
+
+    let umkehr = 0;
+    let knick = 0;
+    for (let i = 2; i < p.length; i++) {
+      const a = p[i - 2] as PlanEntry;
+      const b = p[i - 1] as PlanEntry;
+      const c = p[i] as PlanEntry;
+      const l1 = Math.hypot(b.x - a.x, b.y - a.y);
+      const l2 = Math.hypot(c.x - b.x, c.y - b.y);
+      if (l1 < 0.5 || l2 < 0.5) continue;
+      const cos = ((b.x - a.x) * (c.x - b.x) + (b.y - a.y) * (c.y - b.y)) / (l1 * l2);
+      if (cos < -0.85) umkehr++;
+      else if (Math.abs(cos) < 0.5) knick++;
+    }
+    // Die Referenz zeigt 23 % Umkehrungen gegen 1 % rechte Winkel.
+    expect(umkehr).toBeGreaterThan(knick);
+  });
+});
+
 describe('Bahnen bei Loch und Einbuchtung', () => {
   const ring = normalizeShape({
     outer: [
