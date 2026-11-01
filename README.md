@@ -144,9 +144,11 @@ sagt es und bittet darum, den Text im Zeichenprogramm in Pfade umzuwandeln
 
 **Noch vereinfacht:**
 
-- Die Satinrichtung wird aus zwölf Probeschnitten gewählt, nicht aus einer
-  echten Mittelachse. Bei einer Form, die in verschiedenen Teilen
-  verschieden läuft, gilt eine Richtung für das Ganze.
+- Die Satin-Mittellinie kommt aus einem Raster und rückt in die Mitte
+  nach; eine echte Mittelachse ist sie nicht. An engen Innenkurven und an
+  den Enden einer Säule bleibt der Stichverlauf unruhig. Verzweigte Formen
+  erkennt sie nicht als solche, sondern fällt auf einen festen Winkel
+  für die ganze Fläche zurück.
 - Der Polygonversatz löst Selbstschnitte nicht auf, sondern wirft
   umgestülpte Ecken weg. Bei stark verwinkelten Formen kann der Kantenlauf
   dadurch lückenhaft werden.
