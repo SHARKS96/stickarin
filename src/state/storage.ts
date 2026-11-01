@@ -10,8 +10,9 @@
  * fehlschlagen, ohne dass die App stehen bleibt.
  */
 import type { HoopId } from '../core/constants.ts';
-import type { AreaSettings } from '../core/pipeline.ts';
+import type { AreaSettings, LineSettings } from '../core/pipeline.ts';
 import type { ThreadChoice } from '../core/threads.ts';
+import type { VectorDocument } from '../vector/types.ts';
 
 const DB_NAME = 'stickarin';
 const DB_VERSION = 1;
@@ -24,8 +25,19 @@ export interface SavedDesign {
   savedAt: number;
   /** Kleines PNG für die Kachel. */
   thumbnail: string;
-  /** Arbeitskopie des Bildes, damit sich alles neu berechnen lässt. */
-  image: { data: Uint8ClampedArray; width: number; height: number };
+  /**
+   * Arbeitskopie des Pixelbildes, damit sich alles neu berechnen lässt.
+   * Fehlt bei einer Vektorzeichnung.
+   */
+  image?: { data: Uint8ClampedArray; width: number; height: number };
+  /**
+   * Die gelesene Vektorzeichnung. Fehlt bei einem Pixelbild.
+   *
+   * Gespeichert wird der gelesene Entwurf und nicht die Datei: Dasselbe
+   * Motiv lässt sich daraus in jeder Größe neu rechnen, und das Lesen —
+   * der einzige Schritt, der an der Datei hängt — ist schon getan.
+   */
+  vector?: VectorDocument;
   settings: {
     widthMm: number;
     hoopId: HoopId;
@@ -39,6 +51,8 @@ export interface SavedDesign {
     threads?: Record<number, ThreadChoice>;
     order: number[] | null;
     areaSettings: Record<number, AreaSettings>;
+    /** Striche gibt es erst mit dem Vektorweg; älteren Stickbildern fehlt das Feld. */
+    lineSettings?: Record<number, LineSettings>;
   };
 }
 

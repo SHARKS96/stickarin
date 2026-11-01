@@ -69,10 +69,10 @@ export function PreviewScreen({ design, onAdvanced, onNext }: Props) {
                 </p>
               )
             ) : (
-              design.image && (
+              design.source && (
                 <img
-                  src={design.image.previewUrl}
-                  alt="Ihr Originalbild"
+                  src={design.source.previewUrl}
+                  alt={design.isVector ? 'Ihre Zeichnung' : 'Ihr Originalbild'}
                   style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12 }}
                 />
               )

@@ -13,9 +13,10 @@ import type { Rgb } from '../image/color.ts';
 import type {
   AreaInfo,
   ComputeOptions,
+  LineInfo,
+  SourceInput,
   WorkerRequest,
   WorkerResponse,
-  WorkImage,
 } from '../worker/protocol.ts';
 
 /** Wartezeit, bevor eine Reglerbewegung zur Rechnung wird. */
@@ -25,6 +26,7 @@ export interface ComputeResult {
   palette: Rgb[];
   counts: number[];
   areas: AreaInfo[];
+  lines: LineInfo[];
   plan: StitchPlan | null;
   stats: PlanStats | null;
   threads: ThreadColor[];
@@ -39,7 +41,7 @@ export interface StitchWorker {
   result: ComputeResult | null;
   busy: boolean;
   error: string | null;
-  compute: (image: WorkImage, options: ComputeOptions) => void;
+  compute: (source: SourceInput, options: ComputeOptions) => void;
   exportFiles: (name: string) => Promise<ExportedFile[]>;
 }
 
@@ -72,6 +74,7 @@ export function useStitchWorker(): StitchWorker {
           palette: message.palette,
           counts: message.counts,
           areas: message.areas,
+          lines: message.lines,
           plan: message.plan ? fromCompactPlan(message.plan) : null,
           stats: message.stats,
           threads: message.threads,
@@ -114,7 +117,7 @@ export function useStitchWorker(): StitchWorker {
     };
   }, []);
 
-  const compute = useCallback((image: WorkImage, options: ComputeOptions) => {
+  const compute = useCallback((source: SourceInput, options: ComputeOptions) => {
     setBusy(true);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
@@ -122,7 +125,7 @@ export function useStitchWorker(): StitchWorker {
       if (!worker) return;
       const id = ++requestId.current;
       latestCompute.current = id;
-      const request: WorkerRequest = { type: 'compute', id, image, options };
+      const request: WorkerRequest = { type: 'compute', id, source, options };
       worker.postMessage(request);
     }, DEBOUNCE_MS);
   }, []);

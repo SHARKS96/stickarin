@@ -1,21 +1,24 @@
 /**
- * Schritt 1: Bild wählen.
+ * Schritt 1: Vorlage wählen.
  *
  * Der Entwurf zeigt drei Wege. „Fotos“ und „Dateien“ sind dieselbe
- * Dateiauswahl mit unterschiedlichem `accept`, „Kamera“ setzt `capture` —
- * auf dem iPad öffnet Safari damit direkt die Kamera, auf dem Rechner
- * ganz normal den Dateidialog.
+ * Dateiauswahl, „Kamera“ setzt `capture` — auf dem iPad öffnet Safari
+ * damit direkt die Kamera, auf dem Rechner ganz normal den Dateidialog.
+ *
+ * Angenommen werden Pixelbilder und Zeichnungen (SVG). Welcher der
+ * beiden Wege es wird, entscheidet die Datei selbst; der Nutzer muss
+ * nichts darüber wissen und soll hier auch nicht danach gefragt werden.
  */
 import { useRef, useState } from 'react';
 import { Tipp, Kamera, Dateien, Fotos } from '../Icons.tsx';
-import { loadImageFile } from '../../state/useDesign.ts';
-import type { LoadedImage } from '../../state/useDesign.ts';
+import { loadSourceFile } from '../../state/useDesign.ts';
+import type { LoadedSource } from '../../state/useDesign.ts';
 
 interface Props {
-  onImage: (img: LoadedImage) => void;
+  onSource: (loaded: LoadedSource) => void;
 }
 
-export function ImageScreen({ onImage }: Props) {
+export function ImageScreen({ onSource }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [capture, setCapture] = useState(false);
   const [over, setOver] = useState<string | null>(null);
@@ -25,9 +28,15 @@ export function ImageScreen({ onImage }: Props) {
     if (!file) return;
     setError(null);
     try {
-      onImage(await loadImageFile(file));
-    } catch {
-      setError('Dieses Bild konnte nicht geöffnet werden. Bitte ein JPG oder PNG wählen.');
+      onSource(await loadSourceFile(file));
+    } catch (problem) {
+      // Beim Lesen einer Zeichnung steht im Fehler, was ihr fehlt; das
+      // hilft mehr als ein allgemeiner Satz.
+      setError(
+        problem instanceof Error && problem.message
+          ? problem.message
+          : 'Diese Datei konnte nicht geöffnet werden. Bitte ein JPG, PNG oder SVG wählen.',
+      );
     }
   };
 
@@ -49,7 +58,7 @@ export function ImageScreen({ onImage }: Props) {
       id: 'dateien',
       icon: <Dateien size={72} />,
       title: 'Aus Dateien',
-      sub: 'Eine Grafik von iCloud, USB-Stick oder aus einer E-Mail',
+      sub: 'Ein Bild oder eine Zeichnung (SVG) von iCloud, USB-Stick oder aus einer E-Mail',
       camera: false,
     },
     {
@@ -104,14 +113,16 @@ export function ImageScreen({ onImage }: Props) {
         <Tipp size={40} />
         <span>
           <strong>Tipp:</strong> Am schönsten werden einfache Bilder mit klaren Flächen und wenigen
-          Farben – zum Beispiel Zeichnungen, Logos oder Schriftzüge.
+          Farben – zum Beispiel Zeichnungen, Logos oder Schriftzüge. Noch besser ist eine Zeichnung
+          als <strong>SVG</strong>: Daraus werden die Kanten glatt statt treppig, und die Farben
+          stehen von vornherein fest.
         </span>
       </p>
 
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.svg"
         {...(capture ? { capture: 'environment' as const } : {})}
         className="visually-hidden"
         onChange={(e) => {
@@ -129,7 +140,7 @@ export const IMAGE_HELP = [
   </>,
   <>
     <strong>Aus Dateien:</strong> für Grafiken, die Sie per E-Mail bekommen oder in iCloud
-    gespeichert haben.
+    gespeichert haben – auch für Zeichnungen im SVG-Format.
   </>,
   <>
     <strong>Foto aufnehmen:</strong> Vorlage flach hinlegen, für gutes Licht sorgen und genau von
